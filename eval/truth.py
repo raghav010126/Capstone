@@ -222,7 +222,7 @@ def make_splits(meta: list[dict], clusters: dict[str, dict]) -> dict[str, list[s
     """Stratified cluster split (dev for prompt iteration, heldout for reporting) + a 20-doc test set."""
     strata: dict[str, list[str]] = defaultdict(list)
     for cid, c in sorted(clusters.items()):
-        key = c["fraud_reason"] or (sorted(c["edge_flags"])[0] if c["edge_flags"] else "clean")
+        key = c["fraud_reason"] or (min(c["edge_flags"]) if c["edge_flags"] else "clean")
         strata[key].append(cid)
     dev, held = [], []
     for i, (_k, cids) in enumerate(sorted(strata.items())):
@@ -292,7 +292,7 @@ def build(root: Path) -> None:
             fields[m["doc_id"]] = amendment_fields(c, doc)
 
     cases: dict[str, list[str]] = defaultdict(list)
-    for doc_id, lab in labels.items():
+    for lab in labels.values():
         cases[lab["case_id"]].append(lab["expected_decision"])
     rollup = {cid: ("ESCALATE" if "ESCALATE" in d else "REJECT" if "REJECT" in d else "APPROVE")
               for cid, d in sorted(cases.items())}

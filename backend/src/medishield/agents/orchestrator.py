@@ -120,7 +120,7 @@ def agent_summaries(per_doc: list[dict], fraud: FraudResult | None) -> dict[str,
 
 def justify(case_id: str, case_decision: str, docs: list[DocumentDecision],
             summaries: dict[str, str]) -> tuple[str, AgentRun]:
-    payload = {"case_id": case_id, "case_decision": case_decision, "agent_summaries": summaries,
+    payload = {"case_decision": case_decision, "agent_summaries": summaries,
                "documents": [{"doc_id": d.doc_id, "type": d.doc_type.value, "decision": d.decision.value,
                               "rule": d.rule_id, "evidence": d.reasons} for d in docs]}
     try:

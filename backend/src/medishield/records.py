@@ -102,6 +102,11 @@ class Records:
         with self._lock:
             self.processed.append(claim)
 
+    def unregister_case(self, case_id: str) -> None:
+        """Forget a case's claims (before it is re-run, so it cannot be flagged as its own duplicate)."""
+        with self._lock:
+            self.processed[:] = [p for p in self.processed if p.case_id != case_id]
+
     def reset_processed(self) -> None:
         with self._lock:
             self.processed.clear()

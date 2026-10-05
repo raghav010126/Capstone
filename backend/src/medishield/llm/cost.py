@@ -6,6 +6,7 @@ import json
 import threading
 import time
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 
 from medishield.config import get_settings
 
@@ -55,6 +56,23 @@ class Ledger:
         budget = get_settings().budget_usd
         if self.total >= budget:
             raise BudgetExceeded(f"recorded spend ${self.total:.2f} >= budget ${budget:.2f}")
+
+    def spent_today(self) -> float:
+        """Spend recorded since 00:00 UTC (the demo deploy's daily cap)."""
+        midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        total = 0.0
+        if self._path.exists():
+            for line in self._path.read_text().splitlines():
+                if line.strip():
+                    rec = json.loads(line)
+                    if rec["ts"] >= midnight:
+                        total += rec.get("cost_usd", 0.0)
+        return total
+
+    def check_daily(self) -> None:
+        cap = get_settings().daily_budget_usd
+        if cap > 0 and self.spent_today() >= cap:
+            raise BudgetExceeded(f"daily budget ${cap:.2f} reached")
 
     def record(self, step: str, model: str, usage: Usage, cost: float, tag: str = "") -> None:
         with self._lock:

@@ -89,6 +89,11 @@ def perceive(task: DocTask, config: RunnableConfig) -> dict:
             doc_type=kw or DocType.UNKNOWN, confidence=0.5, routing_tags=["classifier_failed"],
             llm_doc_type=DocType.UNKNOWN, llm_self_confidence=0.0, keyword_doc_type=kw, keyword_margin=0.0,
             reason=f"LLM unavailable: {e}").model_dump(mode="json")
+    forced = (_cfg(config, "forced_types") or {}).get(doc_id)
+    if forced:                                           # a human reviewer reclassified this document
+        out["classification"].update(doc_type=forced, confidence=1.0, routing_tags=sorted(
+            set(out["classification"]["routing_tags"]) | {"reclassified"}),
+            reason=f"reclassified by a reviewer (was {out['classification']['doc_type']})")
     dtype = DocType(out["classification"]["doc_type"])
     if dtype != DocType.UNKNOWN and not q.blank:
         try:

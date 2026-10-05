@@ -150,11 +150,11 @@ def get_client() -> anthropic.Anthropic:
 
 def _call_api(r: Route, system: str, blocks: list[dict], schema: dict) -> tuple[str, str, Usage]:
     s = get_settings()
-    kwargs: dict[str, Any] = dict(
-        model=r.model, max_tokens=r.max_tokens, system=system,
-        messages=[{"role": "user", "content": blocks}],
-        output_config={"effort": r.effort, "format": {"type": "json_schema", "schema": schema}},
-    )
+    kwargs: dict[str, Any] = {
+        "model": r.model, "max_tokens": r.max_tokens, "system": system,
+        "messages": [{"role": "user", "content": blocks}],
+        "output_config": {"effort": r.effort, "format": {"type": "json_schema", "schema": schema}},
+    }
     client = get_client()
     try:
         if s.use_fallbacks:

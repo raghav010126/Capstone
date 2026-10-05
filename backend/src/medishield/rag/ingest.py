@@ -122,7 +122,7 @@ def ingest_pdf(pdf: Path, plan: str | None = None) -> PolicyIndex:
                 tables[-1]["pages"] = sorted(set(tables[-1]["pages"]) | {page})
             else:
                 if numeric_header:                                    # no header and nothing to stitch to
-                    header, rows = [f"col{i}" for i in range(len(header))], rows
+                    header = [f"col{i}" for i in range(len(header))]
                 tables.append({"header": header, "rows": rows, "pages": [page] if page else []})
             continue
         text = (getattr(item, "text", "") or "").strip()

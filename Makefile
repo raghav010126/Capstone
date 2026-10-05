@@ -28,3 +28,13 @@ eval:               ## dev split (prompt iteration happens here only) -> docs/EV
 
 lint:
 	$(PY) ruff check backend/src eval datagen
+
+.PHONY: api worker test-fast
+api:                ## API + in-process worker on :8000 (Swagger at /docs)
+	$(PY) uvicorn medishield.api.main:app --reload --port 8000
+
+worker:             ## standalone queue worker (run the API with MEDISHIELD_WORKER=external)
+	$(PY) python -m medishield.worker.queue
+
+test-fast:          ## everything except the real-pipeline integration tests
+	$(PY) pytest -q -m "not integration"

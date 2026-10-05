@@ -132,8 +132,8 @@ def extract(path: str, doc_type: DocType, lines: list[OcrLine], q: QualityMetric
     read_model = READ_MODELS[doc_type]
     raw = "\n".join(ln.text for ln in lines)
     parts = [image_part(path, route("extract").image_long_edge),
-             f"OCR text (may contain errors; handwriting may be missing):\n<ocr>\n{raw}\n</ocr>\n"
-             "Extract the fields."]
+             ("OCR text (may contain errors; handwriting may be missing):\n"
+              f"<ocr>\n{raw}\n</ocr>\nExtract the fields.")]
     system = f"{COMMON}\n\n{TYPE_HINTS[doc_type]}"
 
     def support_of(o) -> float:

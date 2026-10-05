@@ -92,6 +92,28 @@ class PolicyStore:
         return [Hit(c, float(s), r) for c, s, r in ranked[:k]]
 
 
+_store_lock = threading.Lock()
+
+
 @lru_cache
+def _build_store() -> PolicyStore:
+    from medishield.services.policies import uploaded_policy_paths
+
+    indexes = {i.plan: i for i in (load_or_ingest(p) for p in policy_pdfs())}
+    for p in uploaded_policy_paths():
+        idx = load_or_ingest(p)
+        plan = p.stem.split("-")[0]
+        idx.plan = plan
+        for c in idx.chunks:
+            c.plan = plan
+        indexes[plan] = idx
+    return PolicyStore(list(indexes.values()))
+
+
 def get_store() -> PolicyStore:
-    return PolicyStore([load_or_ingest(p) for p in policy_pdfs()])
+    """The policy store, built once; concurrent first callers wait for the same build."""
+    with _store_lock:
+        return _build_store()
+
+
+get_store.cache_clear = _build_store.cache_clear          # type: ignore[attr-defined]

@@ -26,7 +26,7 @@ def dhash(path: str | Path, size: int = 8) -> str:
     """Perceptual difference hash (64 bits): robust to re-scans, so re-submitted images collide."""
     with Image.open(path) as im:
         g = im.convert("L").resize((size + 1, size), Image.LANCZOS)
-        px = list(g.getdata())
+        px = list(g.tobytes())
     bits = 0
     for r in range(size):
         for c in range(size):
@@ -35,7 +35,7 @@ def dhash(path: str | Path, size: int = 8) -> str:
 
 
 def hamming(a: str, b: str) -> int:
-    return bin(int(a, 16) ^ int(b, 16)).count("1")
+    return (int(a, 16) ^ int(b, 16)).bit_count()
 
 
 def norm_claim_no(s: str | None) -> str | None:

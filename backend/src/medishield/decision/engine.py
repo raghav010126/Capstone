@@ -70,7 +70,8 @@ def _eval(cond, preds: dict[str, bool], flags: set[str], lists: dict[str, set[st
             return True
         return False
     if "any" in cond:
-        return any([_eval(c, preds, flags, lists, hits) for c in cond["any"]])
+        # a list, not a generator: evaluate every branch so all triggered reasons are recorded in ``hits``
+        return any([_eval(c, preds, flags, lists, hits) for c in cond["any"]])  # noqa: C419
     if "any_flag_in" in cond:
         matched = sorted(flags & lists[cond["any_flag_in"]])
         hits.extend(matched)

@@ -68,8 +68,8 @@ def run_fraud(ctx: CaseContext, records: Records, tag: str = "") -> tuple[FraudR
     ids = [d.doc_id for d in ctx.docs]
     try:
         rules_txt = "\n".join(f"- {a.doc_id}: {a.code} ({a.detail})" for a in anoms) or "- none"
-        res = structured("fraud", SYSTEM, [f"Case {ctx.case_id} documents:\n{_summary(ctx)}\n\n"
-                                           f"Rule-based anomalies:\n{rules_txt}"], FraudRead, tag=tag)
+        res = structured("fraud", SYSTEM, [(f"Case documents (in submission order):\n{_summary(ctx)}\n\n"
+                                            f"Rule-based anomalies:\n{rules_txt}")], FraudRead, tag=tag)
         narrative = res.parsed.narrative
         for x in res.parsed.additional_anomalies:
             if x.doc_id in ids:

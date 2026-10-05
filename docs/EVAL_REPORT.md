@@ -1,6 +1,6 @@
 # Evaluation report: official / dev split
 
-_Generated 2026-10-05T00:09:49 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
+_Generated 2026-10-05T12:10:50 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
 
 ## Rubric metrics
 
@@ -91,9 +91,9 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 ## Operations
 
 - Cases: 17, documents: 77
-- Case latency (cold path incl. LLM): p50 18.3s, p95 26.9s
-- Cost without cache: $2.67 total, $0.157/case, $0.035/document. Spent this run: $0.65
-- Cost by agent: classifier $0.52, extractor $0.86, kyc_visual $0.15, policy $0.60, fraud $0.41, justify $0.12
-- LLM calls: 223 (195 served from cache); retries on Opus: {'extractor': 3, 'kyc_visual': 3, 'classifier': 1}
+- Case latency (cold path incl. LLM): p50 20.4s, p95 29.4s
+- Cost without cache: $2.66 total, $0.157/case, $0.035/document. Spent this run: $0.53
+- Cost by agent: classifier $0.52, extractor $0.86, kyc_visual $0.15, policy $0.60, fraud $0.40, justify $0.12
+- LLM calls: 223 (185 served from cache); retries on Opus: {'extractor': 3, 'kyc_visual': 3, 'classifier': 1}
 - Mean OCR grounding rate 97.9%; mean support rate (grounded or corroborated by the member database) 98.5%
 

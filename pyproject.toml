@@ -19,10 +19,27 @@ dependencies = [
     "rapidfuzz>=3.14.6",
     "python-dotenv>=1.2.4",
     "truststore>=0.10.4",
+    "fastapi>=0.142.2",
+    "uvicorn[standard]>=0.54.0",
+    "sqlalchemy>=2.1.3",
+    "alembic>=1.20.0",
+    "huey>=3.4.0",
+    "pyjwt>=2.15.1",
+    "bcrypt>=5.0.0",
+    "reportlab>=5.0.1",
+    "python-multipart>=0.0.32",
+    "boto3>=1.43.108",
+    "redis>=8.1.0",
+    "langgraph-checkpoint-sqlite>=3.1.1",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.3", "ruff>=0.8"]
+dev = [
+    "moto>=5.2.3",
+    "pytest>=8.3",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.8",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
@@ -33,7 +50,17 @@ module-root = "backend/src"
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "eval/tests"]
+pythonpath = ["backend/tests"]
+markers = ["integration: runs the real pipeline against cached model responses (needs data/official)"]
 
 [tool.ruff]
 line-length = 110
 target-version = "py312"
+
+[tool.ruff.lint]
+# DTZ: document dates (DOB, expiry, service date) are calendar dates without a timezone by nature.
+# UP046/UP047: the codebase keeps classic TypeVar generics for readability.
+extend-ignore = ["DTZ007", "DTZ005", "UP046", "UP047"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["medishield.api.security.require", "fastapi.Depends", "fastapi.Query", "fastapi.File", "fastapi.Form", "fastapi.Header"]
