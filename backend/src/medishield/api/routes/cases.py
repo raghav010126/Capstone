@@ -135,7 +135,8 @@ def case_detail(case_id: str, user: Principal = Depends(require("case:read")), d
         fraud=FraudResult.model_validate(c.fraud) if c.fraud else None,
         documents=[document_out(c.id, d) for d in c.documents],
         agent_runs=[S.AgentRunOut.model_validate(r, from_attributes=True) for r in runs],
-        overrides=[override_out(o) for o in ovs], wall_ms=c.wall_ms, cost_usd=c.cost_usd)
+        overrides=[override_out(o) for o in ovs], wall_ms=c.wall_ms, cost_usd=c.cost_usd,
+        cold_cost_usd=c.cold_cost_usd)
 
 
 @router.get("/cases/{case_id}/documents/{doc_id}/image")

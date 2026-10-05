@@ -1,6 +1,6 @@
 # API notes (checkpoint 3)
 
-Run: `make api` (Swagger UI at `/docs`), or `scripts/demo_api.sh C_002` for a curl walkthrough.
+Run: `make api` (port 8100; Swagger UI at `/docs`), or `scripts/demo_api.sh C_002` for a curl walkthrough.
 The worker runs inside the API process by default; `MEDISHIELD_WORKER=external` + `make worker` runs it separately.
 
 ## Roles

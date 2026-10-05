@@ -84,6 +84,7 @@ class AgentRunOut(BaseModel):
     input_tokens: int
     output_tokens: int
     cost_usd: float
+    cold_cost_usd: float = 0.0
     latency_ms: float
     llm_calls: int
 
@@ -112,6 +113,7 @@ class CaseDetail(CaseSummary):
     overrides: list[OverrideOut]
     wall_ms: float
     cost_usd: float
+    cold_cost_usd: float = 0.0
     warnings: list[str] = []
 
 

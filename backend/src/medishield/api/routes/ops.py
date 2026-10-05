@@ -16,6 +16,17 @@ BASELINE_ANNUAL_COST = 18_400_000
 MONTHLY_DOCS = 85_000
 
 
+@router.get("/ops/eval")
+def eval_results(_: Principal = Depends(require("ops:read"))):
+    """Published evaluation scorecards (written by ``make eval``; committed under docs/eval_results)."""
+    import json
+
+    from medishield.config import REPO_ROOT
+
+    d = REPO_ROOT / "docs" / "eval_results"
+    return {p.stem: json.loads(p.read_text()) for p in sorted(d.glob("*.json"))} if d.exists() else {}
+
+
 @router.get("/healthz")
 def healthz():
     return {"status": "ok"}
@@ -33,7 +44,7 @@ def summary(_: Principal = Depends(require("ops:read")), db: Session = Depends(g
     overridden = set(db.execute(select(Override.case_id).where(Override.status == "APPLIED")).scalars())
     stp = [c for c in done if c.ai_decision != "ESCALATE" and c.id not in overridden]
     docs = sum(len(c.documents) for c in done)
-    avg_cost_case = (sum(c.cost_usd for c in done) / len(done)) if done else 0.0
+    avg_cost_case = (sum(c.cold_cost_usd for c in done) / len(done)) if done else 0.0   # uncached unit cost
     avg_docs = (docs / len(done)) if done else 0.0
     cost_per_doc = (avg_cost_case / avg_docs) if avg_docs else 0.0
     review_share = (1 - len(stp) / len(done)) if done else 0.0

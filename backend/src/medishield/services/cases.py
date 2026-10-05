@@ -160,6 +160,8 @@ def process_case(case_id: str) -> None:
         paths = [(d.doc_id, storage.local_path(d.storage_key)) for d in case.documents]
         forced = {d.doc_id: d.forced_type for d in case.documents if d.forced_type}
     get_records().unregister_case(case_id)
+    with session_scope() as db:                       # a re-run (e.g. after a reclassification) starts a fresh progress log
+        db.query(CaseEvent).filter(CaseEvent.case_id == case_id).delete()
     emit(case_id, {"node": "queued", "status": "running"})
     try:
         out = pipeline.run_case_stream(case_id, paths, thread_id, lambda ev: emit(case_id, ev), forced)
@@ -198,13 +200,14 @@ def persist_result(db: Session, case: Case, values: dict[str, Any], paused: bool
     for r in runs:
         db.add(AgentRunRow(case_id=case.id, agent=r["agent"], model=r.get("model"), retried_with=r.get("retried_with"),
                            input_tokens=r["input_tokens"], output_tokens=r["output_tokens"], cost_usd=r["cost_usd"],
-                           latency_ms=r["latency_ms"], llm_calls=r["llm_calls"], cache_hits=r["cache_hits"]))
+                           cold_cost_usd=r.get("cold_cost_usd", r["cost_usd"]), latency_ms=r["latency_ms"], llm_calls=r["llm_calls"], cache_hits=r["cache_hits"]))
     fraud = values.get("fraud") or {}
     case.decision, case.fraud = dec, fraud
     case.ai_decision, case.ai_confidence = dec["decision"], dec["confidence"]
     case.risk_score = fraud.get("fraud_score", 0.0)
     case.total_amount = case_total(case.documents)
     case.wall_ms, case.cost_usd = wall_ms, round(sum(r["cost_usd"] for r in runs), 4)
+    case.cold_cost_usd = round(sum(r.get("cold_cost_usd", r["cost_usd"]) for r in runs), 4)
     case.final_decision = None if paused else dec["decision"]
     case.status = "IN_REVIEW" if paused else "DECIDED"
     audit.append(db, "system", "case_decided", case.id,

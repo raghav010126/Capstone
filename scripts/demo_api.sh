@@ -2,7 +2,7 @@
 # Walk one dataset case through the running API with curl: login -> upload -> watch -> review -> audit -> report.
 # Usage: scripts/demo_api.sh [cluster, default C_002]   (start the API first:  make api)
 set -euo pipefail
-API=${API:-http://localhost:8000}
+API=${API:-http://localhost:8100}
 CLUSTER=${1:-C_002}
 DS=data/official/dataset
 

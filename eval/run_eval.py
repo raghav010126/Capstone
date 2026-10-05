@@ -138,6 +138,10 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "results.json").write_text(json.dumps(result, indent=1, default=str))
     (out_dir / "rows.json").write_text(json.dumps(rows, indent=1, default=str))
+    if not args.cases:                         # full-split runs are published for the Insights page
+        pub = REPO / "docs" / "eval_results"
+        pub.mkdir(exist_ok=True)
+        (pub / f"{root.name}-{args.split}.json").write_text(json.dumps(result, indent=1, default=str))
     if not args.no_report:
         from report import write_report
 

@@ -30,11 +30,31 @@ lint:
 	$(PY) ruff check backend/src eval datagen
 
 .PHONY: api worker test-fast
-api:                ## API + in-process worker on :8000 (Swagger at /docs)
-	$(PY) uvicorn medishield.api.main:app --reload --port 8000
+api:                ## API + in-process worker on :8100 (Swagger at /docs)
+	$(PY) uvicorn medishield.api.main:app --reload --port 8100
 
 worker:             ## standalone queue worker (run the API with MEDISHIELD_WORKER=external)
 	$(PY) python -m medishield.worker.queue
 
 test-fast:          ## everything except the real-pipeline integration tests
 	$(PY) pytest -q -m "not integration"
+
+.PHONY: openapi web-types web web-build
+openapi:            ## dump the API's OpenAPI schema for the frontend
+	$(PY) python -c "import json,medishield.api.main as m; json.dump(m.app.openapi(), open('frontend/openapi.json','w'), indent=1)"
+
+web-types: openapi  ## generate TypeScript types from the OpenAPI schema (end-to-end typing)
+	scripts/web.sh npx openapi-typescript openapi.json -o src/lib/api-types.ts
+
+web:                ## Next.js dev server on :3000 (needs `make api` on :8100, or set NEXT_PUBLIC_API_URL)
+	scripts/web.sh run dev
+
+web-build:
+	scripts/web.sh run build
+
+.PHONY: web-start e2e
+web-start:          ## production build of the UI on :3001 (what gets deployed)
+	scripts/web.sh run build && scripts/web.sh run start -- -p 3001
+
+e2e:                ## full UI flow in Chrome against the production build (needs `make web-start`, and `make api` with MEDISHIELD_LLM_OFFLINE=1 CORS_ORIGINS=http://localhost:3001)
+	cd frontend && WEB=http://localhost:3001 PATH=$$HOME/.local/node/bin:$$PATH node e2e/flow.mjs /tmp/medishield-e2e

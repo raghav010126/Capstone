@@ -157,6 +157,8 @@ _PHI_PATTERNS = [
     (re.compile(r"\bNPI-?\d{10}\b"), "[NPI]"),
     (re.compile(r"\b[A-Z][a-z]+ [A-Z][a-z]+ [A-Z]\.(?!\w)"), "[NAME]"),
     (re.compile(r"(?i)bearer\s+[\w.-]+"), "Bearer [TOKEN]"),
+    (re.compile(r"eyJ[\w-]+\.[\w-]+\.[\w-]+"), "[JWT]"),               # any JWT, wherever it appears
+    (re.compile(r"(?i)([?&]token=)[^&\s\"]+"), r"\1[TOKEN]"),            # WebSocket / SSE URLs carry the login token
 ]
 
 
@@ -167,9 +169,16 @@ def redact(text: str) -> str:
 
 
 class PHIFilter(logging.Filter):
+    """Redact in place and keep ``record.args`` intact: formatters (uvicorn's access log unpacks five fixed
+    arguments) depend on its shape."""
+
     def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = redact(record.getMessage())
-        record.args = ()
+        if isinstance(record.msg, str):
+            record.msg = redact(record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(redact(a) if isinstance(a, str) else a for a in record.args)
+        elif isinstance(record.args, dict):
+            record.args = {k: redact(v) if isinstance(v, str) else v for k, v in record.args.items()}
         return True
 
 

@@ -467,3 +467,44 @@ def test_report_has_no_literal_markup(client, auth, fake_pipeline):
     pdf = pdfium.PdfDocument(client.get(f"/cases/{cid}/report.pdf", headers=auth("reviewer")).content)
     text = "".join(pdf[i].get_textpage().get_text_range() for i in range(len(pdf)))
     assert cid in text and "<b>" not in text and "Hash-chain status" in text and "VERIFIED" in text
+
+
+def test_timestamps_are_utc_aware(client, auth, fake_pipeline):
+    """SQLite drops offsets; without an explicit 'Z' browsers would read UTC times as local time."""
+    upload(client, auth("submitter"))
+    case = client.get("/cases", headers=auth("reviewer")).json()[0]
+    assert case["created_at"].endswith(("Z", "+00:00")) and case["sla_due"].endswith(("Z", "+00:00"))
+
+
+def test_cost_kpis_use_uncached_cost(client, auth, fake_pipeline):
+    """A replayed run spends $0, but the dashboard must show what a case costs without the cache."""
+    cid = upload(client, auth("submitter")).json()["case_id"]
+    c = client.get(f"/cases/{cid}", headers=auth("reviewer")).json()
+    assert c["cold_cost_usd"] == 0.01 and c["agent_runs"][0]["cold_cost_usd"] == 0.01
+    assert client.get("/ops/summary", headers=auth("auditor")).json()["avg_cost_usd_per_case"] == 0.01
+
+
+def test_log_redaction_keeps_uvicorn_access_logs_working():
+    """The access formatter unpacks exactly five arguments; the filter must redact them without changing the shape."""
+    import logging
+
+    from medishield.api.security import PHIFilter
+    from uvicorn.logging import AccessFormatter
+
+    jwt_like = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhIn0.c2lnbmF0dXJl"
+    rec = logging.LogRecord("uvicorn.access", logging.INFO, "x", 1, '%s - "%s %s HTTP/%s" %d',
+                            ("127.0.0.1:5000", "GET", f"/ws/cases/CASE-1?token={jwt_like}", "1.1", 200), None)
+    assert PHIFilter().filter(rec) and len(rec.args) == 5
+    line = AccessFormatter('%(client_addr)s - "%(request_line)s" %(status_code)s', use_colors=False).format(rec)
+    assert jwt_like not in line and "token=[TOKEN]" in line and "200" in line
+
+
+def test_rerun_starts_a_fresh_progress_log(client, auth, fake_pipeline):
+    """After a reclassification the live graph must not be fed the previous run's events."""
+    cid = upload(client, auth("submitter")).json()["case_id"]
+    first = client.get(f"/cases/{cid}/events", headers=auth("submitter")).json()
+    client.post(f"/cases/{cid}/documents/doc0/reclassify", headers=auth("reviewer"),
+                json={"doc_type": "CLAIM_FORM", "reason_code": "CLASSIFICATION_ERROR"})
+    second = client.get(f"/cases/{cid}/events", headers=auth("submitter")).json()
+    assert [e["node"] for e in second] == [e["node"] for e in first]          # one run's worth, not two
+    assert min(e["id"] for e in second) > max(e["id"] for e in first)

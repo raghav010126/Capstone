@@ -24,14 +24,35 @@ def out(p: PolicyDoc) -> S.PolicyOut:
                        error=p.error, created_at=p.created_at)
 
 
+def bundled() -> list[tuple[int, S.PolicyOut, list[dict]]]:
+    """The policies shipped with the dataset (negative ids), from the cached ingestion results."""
+    from datetime import UTC, datetime
+
+    from medishield.rag.ingest import load_or_ingest, policy_pdfs
+
+    rows = []
+    for i, pdf in enumerate(policy_pdfs(), 1):
+        idx = load_or_ingest(pdf)
+        rows.append((-i, S.PolicyOut(id=-i, plan=idx.plan, filename=pdf.name, status="READY", product_code=idx.product_code,
+                                     chunk_count=len(idx.chunks), exclusion_rows=len(idx.ranges), uploaded_by="bundled",
+                                     error=None, created_at=datetime.fromtimestamp(pdf.stat().st_mtime, UTC)),
+                     [r.to_dict() for r in idx.ranges]))
+    return rows
+
+
 @router.get("/policies", response_model=list[S.PolicyOut])
 def list_policies(_: Principal = Depends(require("policy:read")), db: Session = Depends(get_db)):
-    return [out(p) for p in db.execute(select(PolicyDoc).order_by(PolicyDoc.id.desc())).scalars()]
+    uploaded = [out(p) for p in db.execute(select(PolicyDoc).order_by(PolicyDoc.id.desc())).scalars()]
+    return uploaded + [o for _id, o, _r in bundled()]
 
 
 @router.get("/policies/{policy_id}", response_model=S.PolicyOut)
 def policy_status(policy_id: int, _: Principal = Depends(require("policy:read")), db: Session = Depends(get_db)):
-    p = db.get(PolicyDoc, policy_id)
+    if policy_id < 0:
+        found = next((o for i, o, _r in bundled() if i == policy_id), None)
+        if found:
+            return found
+    p = db.get(PolicyDoc, policy_id) if policy_id > 0 else None
     if p is None:
         raise HTTPException(404, "policy not found")
     return out(p)
@@ -39,7 +60,11 @@ def policy_status(policy_id: int, _: Principal = Depends(require("policy:read"))
 
 @router.get("/policies/{policy_id}/ranges")
 def policy_ranges(policy_id: int, _: Principal = Depends(require("policy:read")), db: Session = Depends(get_db)):
-    p = db.get(PolicyDoc, policy_id)
+    if policy_id < 0:
+        found = next(((o.plan, r) for i, o, r in bundled() if i == policy_id), None)
+        if found:
+            return {"plan": found[0], "ranges": found[1]}
+    p = db.get(PolicyDoc, policy_id) if policy_id > 0 else None
     if p is None:
         raise HTTPException(404, "policy not found")
     return {"plan": p.plan, "ranges": p.ranges or []}
