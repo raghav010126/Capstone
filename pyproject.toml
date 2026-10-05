@@ -1,0 +1,32 @@
+[project]
+name = "medishield"
+version = "0.1.0"
+description = "MediShield: multi-agent document intake (classify, extract, KYC, policy RAG, fraud, decide)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy>=2.0",
+    "pillow>=11.0",
+    "fpdf2>=2.8",
+    "pydantic>=2.9",
+    "pyyaml>=6.0",
+    "docling>=2.133.0",
+    "rapidocr>=3.9.2",
+    "onnxruntime>=1.30.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.8"]
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "backend/src"
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests", "eval/tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
