@@ -29,3 +29,6 @@ spikes/out/
 
 # editor tooling (Salesforce VS Code extension)
 .sf/
+
+# eval run outputs (results are summarised in docs/EVAL_REPORT.md)
+eval/runs/

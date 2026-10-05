@@ -9,7 +9,8 @@ other 151 are *derived* here with explicit, documented rules (see ``docs/dataset
                 can be reported on all docs and on the subset whose label is visible in the pixels.
 
 Outputs (in ``<root>/ground_truth/``): ``labels.json`` (decisions, reasons, visibility, case roll-ups, splits)
-and ``fields.json`` (expected extraction values per document).
+and ``fields.json`` (expected extraction values per document: claims, IDs, discharge summaries,
+prescriptions and amendments).
 
 Usage: python eval/truth.py data/official
 """
@@ -17,6 +18,7 @@ Usage: python eval/truth.py data/official
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -144,6 +146,78 @@ def id_fields(c: dict, doc: dict, expiry: str | None) -> dict:
     }
 
 
+_DATE = re.compile(r"\b(\d{2})/(\d{2})/(\d{4})\b")
+SIG_INK = [18, 18, 80]                   # generate_docs.SIG_INK: handwriting-font ink
+
+
+def _blob(doc: dict) -> str:
+    return "\n".join(t["text"] for t in doc["texts"])
+
+
+def _iso_from(m: re.Match) -> str:
+    return f"{m.group(3)}-{m.group(1)}-{m.group(2)}"
+
+
+def _date_after(blob: str, label: str) -> str | None:
+    """First mm/dd/yyyy date that follows ``label`` in the drawn text (labels and values may be separate strings)."""
+    i = blob.find(label)
+    if i < 0:
+        return None
+    m = _DATE.search(blob, i + len(label))
+    return _iso_from(m) if m else None
+
+
+def discharge_fields(c: dict, doc: dict) -> dict:
+    """Admission/discharge dates are drawn from the generator RNG, so they are read back from the render
+    record (the hospital-course sentence is present in every layout style)."""
+    blob = _blob(doc)
+    admit, discharge = _date_after(blob, "was admitted on"), _date_after(blob, "cleared for discharge on")
+    assert admit and discharge, f"discharge dates not found for {c['patient_id']}"
+    return {
+        "patient_name": c["name"] if c["name"] in blob else None,
+        "patient_dob": c["dob"] if c["dob"] in blob else None,
+        "admit_date": admit,
+        "discharge_date": discharge,
+        "primary_icd": c["icd_code"] if c["icd_code"] in blob else None,
+        "attending_physician": c["doctor"] if c["doctor"] in blob else None,
+        "facility": c["hospital"] if c["hospital"].upper() in blob.upper() else None,
+    }
+
+
+def rx_fields(c: dict, doc: dict) -> dict:
+    blob = _blob(doc)
+    dob_iso = _iso_from(_DATE.search(c["dob"]))
+    dates = {_iso_from(m) for m in _DATE.finditer(blob)} - {dob_iso}
+    assert len(dates) == 1, f"{c['patient_id']}: expected one Rx date, found {dates}"
+    dea_m = re.search(r"DEA[^:]*:\s*([A-Z]{2}\d{7})", blob)
+    missing = c.get("rx_missing_field_type")
+    return {
+        "patient_name": c["name"] if c["name"] in blob else None,
+        "patient_dob": c["dob"] if c["dob"] in blob else None,
+        "rx_date": dates.pop(),
+        "prescriber": c["doctor"] if c["doctor"] in blob else None,
+        "prescriber_npi": c["npi"] if c["npi"] in blob else None,
+        "dea_number": dea_m.group(1) if dea_m else None,
+        "drugs": [rx[0] for rx in c["rx_list"] if rx[0] in blob],
+        "missing_field": missing,                       # dea | dosage | refills | drug_name | None
+    }
+
+
+def amendment_fields(c: dict, doc: dict) -> dict:
+    blob = _blob(doc)
+    texts = doc["texts"]
+    handwritten = any(t["fill"] == SIG_INK and t["text"] == c["name"] for t in texts)
+    eff = _date_after(blob, "Effective Date")
+    return {
+        "policy_number": c["policy"] if c["policy"] in blob else None,
+        "policyholder": c["name"] if c["name"] in blob else None,
+        "dob": c["dob"] if c["dob"] in blob else None,
+        "amendment_type": c["amendment"][0],
+        "effective_date": eff,
+        "handwritten": handwritten,
+    }
+
+
 def make_splits(meta: list[dict], clusters: dict[str, dict]) -> dict[str, list[str]]:
     """Stratified cluster split (dev for prompt iteration, heldout for reporting) + a 20-doc test set."""
     strata: dict[str, list[str]] = defaultdict(list)
@@ -210,6 +284,12 @@ def build(root: Path) -> None:
             fields[m["doc_id"]] = claim_fields(c, doc, m)
         elif m["category"] == "id_documents":
             fields[m["doc_id"]] = id_fields(c, doc, cl["id_expiry"].get(c["cluster_id"]))
+        elif m["category"] == "discharge_summaries":
+            fields[m["doc_id"]] = discharge_fields(c, doc)
+        elif m["category"] == "prescriptions":
+            fields[m["doc_id"]] = rx_fields(c, doc)
+        elif m["category"] == "policy_amendments":
+            fields[m["doc_id"]] = amendment_fields(c, doc)
 
     cases: dict[str, list[str]] = defaultdict(list)
     for doc_id, lab in labels.items():

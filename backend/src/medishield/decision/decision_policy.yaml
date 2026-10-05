@@ -1,0 +1,61 @@
+# MediShield decision policy - the only place a final decision is made.
+# LLM agents produce readings and evidence; this table turns facts into APPROVE / REJECT / ESCALATE.
+# Rules are evaluated top to bottom; the first match wins (mirrors the assignment brief's orchestrator rule).
+version: 1
+
+thresholds:
+  classifier_min_confidence: 0.6     # below -> ESCALATE (unrecognised / low-confidence document)
+  agent_min_confidence: 0.6          # any agent below -> ESCALATE
+  fraud_escalate: 0.3                # per-document fraud score at/above -> ESCALATE
+
+# Facts that are hard failures. "tamper_suspected" maps to REJECT as the brief specifies; set
+# tamper_action: ESCALATE to route suspected tampering to a human instead.
+tamper_action: REJECT
+hard_fail_flags:
+  - kyc_failed                # KYC flags: expired_id, member_not_found, member_inactive
+  - procedure_not_covered     # policy: a billed code inside an exclusion range of table 4.1
+  - schema_invalid            # claims standard: required field missing / invalid / marked [MISSING]
+
+# Soft flags that always need a human, independent of confidence.
+escalate_flags:
+  - coverage_conditional      # rider / prior authorisation required but not confirmed
+  - agent_failed              # an agent errored (LLM unavailable, budget reached, refusal)
+
+rules:
+  - id: R1_unknown_or_unclassified
+    decision: ESCALATE
+    when: {any: [doc_unknown, classifier_low_confidence]}
+  - id: R2_hard_failure
+    decision: REJECT
+    when: {any_flag_in: hard_fail_flags}
+  - id: R3_fraud_or_low_confidence
+    decision: ESCALATE
+    when: {any: [fraud_high, agent_low_confidence, {any_flag_in: escalate_flags}]}
+  - id: R4_default
+    decision: APPROVE
+    when: always
+
+# Fraud rule weights (per document, combined by noisy-OR: 1 - prod(1 - w)). Rules attribute each signal to
+# the document that carries it. The LLM's cross-document review is capped so it can never escalate alone.
+fraud:
+  weights:
+    duplicate_claim: 0.7
+    readmission_30d: 0.6
+    rx_date_after_service: 0.6
+    obstetric_code_without_pregnancy_dx: 0.5
+    structuring_below_10k: 0.5
+    identity_name_mismatch: 0.5
+    identity_dob_mismatch: 0.3
+    unlisted_combined_code: 0.2
+    total_mismatch: 0.2
+    provider_billing_outlier: 0.15
+    claim_frequency: 0.15
+  llm_weight: {low: 0.1, medium: 0.2}
+  llm_cap_per_doc: 0.2
+  readmission_days: 30
+  rx_after_service_days: 30
+  structuring_band: [9000, 10000]
+  billing_z: 4.0
+  frequency_window_days: 30
+  frequency_min_claims: 3
+  risk_levels: {medium: 0.3, high: 0.6}

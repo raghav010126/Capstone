@@ -1,0 +1,596 @@
+{
+ "_doc": "Build the policy-retrieval gold set from the policy *text* (never from retriever output).",
+ "plans": {
+  "gold": {
+   "15822": {
+    "category": "excluded",
+    "relevant_sections": [
+     "4",
+     "4.1"
+    ],
+    "evidence": [
+     "15000-15999",
+     "15820-15829"
+    ]
+   },
+   "17000": {
+    "category": "excluded",
+    "relevant_sections": [
+     "4",
+     "4.1"
+    ],
+    "evidence": [
+     "17000-17999"
+    ]
+   },
+   "21120": {
+    "category": "excluded",
+    "relevant_sections": [
+     "4",
+     "4.1"
+    ],
+    "evidence": [
+     "21120-21299"
+    ]
+   },
+   "27447": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 20% after ded. 40% after ded.",
+     "\u00a73: * Surgical services: physician fees, anesthesia, operating room, post-"
+    ]
+   },
+   "29827": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 20% after ded. 40% after ded.",
+     "\u00a73: * Surgical services: physician fees, anesthesia, operating room, post-"
+    ]
+   },
+   "33533": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 20% after ded. 40% after ded.",
+     "\u00a73: * Surgical services: physician fees, anesthesia, operating room, post-"
+    ]
+   },
+   "36415": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 20% after ded. 40% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests, blood panels, urinalysis, pat"
+    ]
+   },
+   "43239": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 20% after ded. 40% after ded.",
+     "\u00a73: * Surgical services: physician fees, anesthesia, operating room, post-"
+    ]
+   },
+   "44970": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 20% after ded. 40% after ded.",
+     "\u00a73: * Surgical services: physician fees, anesthesia, operating room, post-"
+    ]
+   },
+   "47562": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 20% after ded. 40% after ded.",
+     "\u00a73: * Surgical services: physician fees, anesthesia, operating room, post-"
+    ]
+   },
+   "58300": {
+    "category": "excluded",
+    "relevant_sections": [
+     "4",
+     "4.1"
+    ],
+    "evidence": [
+     "58300-58353"
+    ]
+   },
+   "59400": {
+    "category": "maternity",
+    "relevant_sections": [
+     "3",
+     "5.1"
+    ],
+    "evidence": [
+     "\u00a73: * Maternity care (labor, delivery, postnatal care) -- subject to Mater",
+     "\u00a75.1: 5.1 Maternity Rider"
+    ]
+   },
+   "70553": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 20% after ded. 40% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests, blood panels, urinalysis, pat"
+    ]
+   },
+   "71046": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 20% after ded. 40% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests, blood panels, urinalysis, pat"
+    ]
+   },
+   "71250": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 20% after ded. 40% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests, blood panels, urinalysis, pat"
+    ]
+   },
+   "72148": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 20% after ded. 40% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests, blood panels, urinalysis, pat"
+    ]
+   },
+   "80053": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 20% after ded. 40% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests, blood panels, urinalysis, pat"
+    ]
+   },
+   "85025": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 20% after ded. 40% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests, blood panels, urinalysis, pat"
+    ]
+   },
+   "86849": {
+    "category": "excluded",
+    "relevant_sections": [
+     "4",
+     "4.1"
+    ],
+    "evidence": [
+     "86849-86999"
+    ]
+   },
+   "90837": {
+    "category": "mental_health",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Mental Health / Substance Use (outpatient) $60 / visit 40% coinsurance",
+     "\u00a73: * Mental health and substance use disorder treatment (inpatient and ou"
+    ]
+   },
+   "93000": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 20% after ded. 40% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests, blood panels, urinalysis, pat"
+    ]
+   },
+   "93306": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 20% after ded. 40% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests, blood panels, urinalysis, pat"
+    ]
+   },
+   "99213": {
+    "category": "office_visit",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Specialist Copay $60 / visit 40% coinsurance",
+     "\u00a73: * Outpatient physician visits: Primary Care Physician and Specialist c"
+    ]
+   },
+   "99214": {
+    "category": "office_visit",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Specialist Copay $60 / visit 40% coinsurance",
+     "\u00a73: * Outpatient physician visits: Primary Care Physician and Specialist c"
+    ]
+   },
+   "99215": {
+    "category": "office_visit",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Specialist Copay $60 / visit 40% coinsurance",
+     "\u00a73: * Outpatient physician visits: Primary Care Physician and Specialist c"
+    ]
+   },
+   "99284": {
+    "category": "emergency",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Emergency Room (ER) Copay $250 / visit $250 + 20%",
+     "\u00a73: * Emergency room services, including stabilization and observation."
+    ]
+   },
+   "99291": {
+    "category": "critical_care",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Inpatient Hospitalization 20% after ded. 40% after ded.",
+     "\u00a73: * Inpatient hospitalization: room and board (up to the Room and Board "
+    ]
+   }
+  },
+  "silver": {
+   "15822": {
+    "category": "excluded",
+    "relevant_sections": [
+     "4",
+     "4.1"
+    ],
+    "evidence": [
+     "15820-15823",
+     "15000-15999",
+     "15820-15829"
+    ]
+   },
+   "17000": {
+    "category": "excluded",
+    "relevant_sections": [
+     "4",
+     "4.1"
+    ],
+    "evidence": [
+     "17000-17999"
+    ]
+   },
+   "21120": {
+    "category": "excluded",
+    "relevant_sections": [
+     "4",
+     "4.1"
+    ],
+    "evidence": [
+     "21120-21299"
+    ]
+   },
+   "27447": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 30% after ded. 50% after ded.",
+     "\u00a73: * Outpatient surgery and procedures performed in a licensed ambulatory"
+    ]
+   },
+   "29827": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 30% after ded. 50% after ded.",
+     "\u00a73: * Outpatient surgery and procedures performed in a licensed ambulatory"
+    ]
+   },
+   "33533": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 30% after ded. 50% after ded.",
+     "\u00a73: * Outpatient surgery and procedures performed in a licensed ambulatory"
+    ]
+   },
+   "36415": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 30% after ded. 50% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests (blood work, urinalysis, patho"
+    ]
+   },
+   "43239": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 30% after ded. 50% after ded.",
+     "\u00a73: * Outpatient surgery and procedures performed in a licensed ambulatory"
+    ]
+   },
+   "44970": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 30% after ded. 50% after ded.",
+     "\u00a73: * Outpatient surgery and procedures performed in a licensed ambulatory"
+    ]
+   },
+   "47562": {
+    "category": "surgery",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Outpatient Surgery 30% after ded. 50% after ded.",
+     "\u00a73: * Outpatient surgery and procedures performed in a licensed ambulatory"
+    ]
+   },
+   "58300": {
+    "category": "excluded",
+    "relevant_sections": [
+     "4",
+     "4.1"
+    ],
+    "evidence": [
+     "58300-58353"
+    ]
+   },
+   "59400": {
+    "category": "maternity",
+    "relevant_sections": [
+     "3",
+     "5"
+    ],
+    "evidence": [
+     "\u00a73: * Maternity and newborn care: prenatal visits, delivery (vaginal and c",
+     "\u00a75: Maternity Rider"
+    ]
+   },
+   "70553": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 30% after ded. 50% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests (blood work, urinalysis, patho"
+    ]
+   },
+   "71046": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 30% after ded. 50% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests (blood work, urinalysis, patho"
+    ]
+   },
+   "71250": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 30% after ded. 50% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests (blood work, urinalysis, patho"
+    ]
+   },
+   "72148": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 30% after ded. 50% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests (blood work, urinalysis, patho"
+    ]
+   },
+   "80053": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 30% after ded. 50% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests (blood work, urinalysis, patho"
+    ]
+   },
+   "85025": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 30% after ded. 50% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests (blood work, urinalysis, patho"
+    ]
+   },
+   "86849": {
+    "category": "excluded",
+    "relevant_sections": [
+     "4",
+     "4.1"
+    ],
+    "evidence": [
+     "86849-86999"
+    ]
+   },
+   "90837": {
+    "category": "mental_health",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Mental Health / Substance Use (outpatient) $80 / visit 50% coinsurance",
+     "\u00a73: * Mental health and substance use disorder services: outpatient therap"
+    ]
+   },
+   "93000": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 30% after ded. 50% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests (blood work, urinalysis, patho"
+    ]
+   },
+   "93306": {
+    "category": "diagnostic",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Diagnostic Lab & Imaging 30% after ded. 50% after ded.",
+     "\u00a73: * Diagnostic services: laboratory tests (blood work, urinalysis, patho"
+    ]
+   },
+   "99213": {
+    "category": "office_visit",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Specialist Copay $80 / visit 50% coinsurance",
+     "\u00a73: * Physician services: office visits, consultations, second opinions, a"
+    ]
+   },
+   "99214": {
+    "category": "office_visit",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Specialist Copay $80 / visit 50% coinsurance",
+     "\u00a73: * Physician services: office visits, consultations, second opinions, a"
+    ]
+   },
+   "99215": {
+    "category": "office_visit",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Specialist Copay $80 / visit 50% coinsurance",
+     "\u00a73: * Physician services: office visits, consultations, second opinions, a"
+    ]
+   },
+   "99284": {
+    "category": "emergency",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Emergency Room (ER) Copay $350 / visit $350 + 30%",
+     "\u00a73: * Emergency care: emergency room services and urgent care for sudden i"
+    ]
+   },
+   "99291": {
+    "category": "critical_care",
+    "relevant_sections": [
+     "1",
+     "3"
+    ],
+    "evidence": [
+     "\u00a71: Inpatient Hospitalization 30% after ded. 50% after ded.",
+     "\u00a73: * Inpatient hospital services: semi-private room and board, general nu"
+    ]
+   }
+  }
+ }
+}

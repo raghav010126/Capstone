@@ -8,8 +8,8 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "datagen"), str(ROOT / "eval")]
-from harness import rotation_forward  # noqa: E402
-from truth import decide  # noqa: E402
+from harness import rotation_forward
+from truth import decide
 
 OFFICIAL = ROOT / "data" / "official" / "ground_truth" / "labels.json"
 

@@ -42,6 +42,9 @@ our system does about it.
 | F15 | Provider NPIs fail the real NPI checksum (Luhn with the 80840 prefix) | Verified for all 8 NPIs in `DOCTORS` | A strict NPI validator rejects every claim | Validate NPI format (10 digits) only; checksum failures are logged as a warning |
 | F16 | A prescription missing its refills shows **no marker**; the row is simply omitted | `generate_prescription` | Only detectable by absence | Extraction checks for required prescription fields |
 | F17 | The Medicare card prints **no expiry date**; an expired card shows only a stamp | `_id_medicare_card` | Expiry can't be extracted for those cards | KYC also reads the "CARD EXPIRED" stamp |
+| F19 | **Synthetic ID layouts have real defects.** On the passport template the dark MRZ band covers the expiry date and the MRZ lines don't follow ICAO format. Both Sonnet and Opus initially called a clean passport "suspicious". | `_id_passport`; checkpoint-2 smoke run on `id_PT_99733` | A naive "any anomaly = tampered" rule REJECTs clean IDs | The KYC vision schema separates *tamper indicators* (localised alteration) from *layout/quality issues*; tampering needs both models to rate it medium/high |
+| F20 | **Obstetric CPT 59400 is rider-dependent, not excluded.** It is in no exclusion range, but the Inclusions section makes maternity "subject to Maternity Rider election" and no member holds a rider | Gold §3 and §5.1 | Brief rule would REJECT (not covered) where the label says ESCALATE (fraud) | Policy agent returns CONDITIONAL → ESCALATE for human review. Only table-4.1 containment can deny a code |
+| F21 | **The readmission UB-04 contradicts itself.** Its statement period is shifted to before the prior stay, while the service lines keep the real date of service | `generate_ub04_form` `:1084-1089` | Comparing against the statement period misses the readmission | `service_date` means the date on the service lines; the UB-04 admission date is extracted separately |
 | F18 | Small quirks: | | | Handled in the harness and loaders |
 | | • The Gold PDF goes to `./policy/`, not `dataset/policies/` | `generate_gold_policy.py:884` | | |
 | | • `metadata.json` paths are absolute (docs) vs relative (unknowns) | | | |
@@ -59,6 +62,11 @@ Rules are evaluated top to bottom; the first match wins. They mirror the brief's
 
 Flags apply only to the document that carries them, as in `metadata.json`. A case's decision is ESCALATE if any of
 its documents is ESCALATE; otherwise REJECT if any is REJECT; otherwise APPROVE.
+
+**Field ground truth** (`fields.json`) covers all 151 non-unknown documents: claims and IDs, plus discharge
+summaries (admit/discharge dates, which come from the generator's RNG and are read back from the drawn
+text), prescriptions (Rx date, prescriber, NPI, DEA, drugs) and amendments (with a `handwritten` marker,
+10 of 30). A field that isn't drawn on the page has value `null` and isn't scored.
 
 **Result on the official set (seed 42):**
 - Documents: **122 APPROVE · 21 REJECT · 12 ESCALATE**.

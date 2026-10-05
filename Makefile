@@ -18,3 +18,13 @@ dataset-seed7:      ## unseen generalisation set - never inspect while developin
 
 test:
 	$(PY) pytest -q
+
+.PHONY: gold eval lint
+gold:               ## retrieval gold set, built from the policy text
+	$(PY) python eval/build_retrieval_gold.py data/official
+
+eval:               ## dev split (prompt iteration happens here only) -> docs/EVAL_REPORT.md
+	$(PY) python eval/run_eval.py --split $(or $(SPLIT),dev) --dataset $(or $(DATASET),data/official)
+
+lint:
+	$(PY) ruff check backend/src eval datagen
