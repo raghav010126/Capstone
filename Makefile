@@ -62,7 +62,10 @@ web-start:          ## production build of the UI on :3001 (what gets deployed)
 e2e:                ## full UI flow in Chrome against the production build (needs `make web-start`, and `make api` with MEDISHIELD_LLM_OFFLINE=1 CORS_ORIGINS=http://localhost:3001)
 	cd frontend && WEB=http://localhost:3001 PATH=$$HOME/.local/node/bin:$$PATH node e2e/flow.mjs /tmp/medishield-e2e
 
-.PHONY: report forensics redteam multilingual
+.PHONY: report forensics redteam multilingual gates
+gates:              ## quality gates over docs/eval_results (no model calls; CI runs this)
+	$(PY) python eval/gates.py
+
 report:             ## assemble docs/EVAL_REPORT.md from docs/eval_results/*.json
 	$(PY) python eval/make_report.py
 

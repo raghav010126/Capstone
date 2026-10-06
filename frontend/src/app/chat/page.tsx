@@ -110,7 +110,9 @@ export default function ChatPage() {
       ),
   })
 
-  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth" }), [turns])
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: "smooth" })     // block body: newer browsers return a Promise here, React wants nothing
+  }, [turns])
 
   const ask = (question: string) => {
     const q = question.trim()

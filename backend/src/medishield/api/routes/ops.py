@@ -24,7 +24,11 @@ def eval_results(_: Principal = Depends(require("ops:read"))):
     from medishield.config import REPO_ROOT
 
     d = Path(os.environ.get("MEDISHIELD_EVAL_DIR") or REPO_ROOT / "docs" / "eval_results")
-    return {p.stem: json.loads(p.read_text()) for p in sorted(d.glob("*.json"))} if d.exists() else {}
+    if not d.exists():
+        return {}
+    runs = {p.stem: json.loads(p.read_text()) for p in sorted(d.glob("*.json"))}
+    # only pipeline evaluation runs (the folder also holds calibrators, red-team and forensics results)
+    return {k: v for k, v in runs.items() if isinstance(v, dict) and {"ops", "decision", "classification"} <= v.keys()}
 
 
 @router.get("/healthz")

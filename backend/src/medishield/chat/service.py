@@ -101,7 +101,8 @@ def answer(payload: dict) -> dict:
     with repo_scope() as repo:
         need = _needed(r)
         blocked = [s for s in need if not access.allowed(user.role, access.SOURCE_PERMISSION[s])]
-        if blocked and len(blocked) == len(need):
+        primary = {"policy": "policies", "audit": "audit", "review": "review"}.get(r.route)
+        if blocked and (len(blocked) == len(need) or primary in blocked):      # the main topic is forbidden: refuse outright
             audit.append(repo, user.username, "chat_blocked", None,
                          {"route": r.route, "blocked": blocked, "question": redact(question)[:200]})
             return _result(access.refusal(user.role, blocked), r.route, user, blocked=True, conversation=conversation, how=how)

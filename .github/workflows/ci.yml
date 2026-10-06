@@ -1,0 +1,46 @@
+# Lint, tests (SQLite and DynamoDB via moto), quality gates over the published evaluation, and a UI build.
+# No secrets and no model calls: the tests stub the models and the gates read docs/eval_results.
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: "3.12"
+      MEDISHIELD_TRACING: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install (without Docling / PyTorch, which only policy ingestion needs)
+        run: uv sync --no-group ingest
+      - name: Lint
+        run: uv run ruff check backend/src eval datagen scripts
+      - name: Tests (SQLite)
+        run: uv run pytest -q -m "not integration"
+      - name: Tests (DynamoDB, moto)
+        run: MEDISHIELD_TEST_DB=dynamodb uv run pytest -q -m "not integration"
+      - name: Quality gates over the published evaluation
+        run: uv run python eval/gates.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - name: Static export (what is deployed to S3)
+        run: STATIC_EXPORT=1 NEXT_PUBLIC_API_URL=/api npm run build

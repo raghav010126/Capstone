@@ -37,6 +37,14 @@ def login(body: LoginRequest, request: Request, db: Repo = Depends(get_db)):
                          role=user.role, display_name=user.display_name)
 
 
+@router.get("/auth/config")
+def auth_config():
+    """Public: whether the local demo passwords (<user>-demo) exist, so the sign-in page knows what its role buttons can do."""
+    from medishield.config import get_settings
+
+    return {"demo_passwords": get_settings().demo_users}
+
+
 @router.get("/auth/me", response_model=UserOut)
 def me(user: Principal = Depends(current_user)):
     return UserOut(username=user.username, display_name=user.display_name, role=user.role.value,

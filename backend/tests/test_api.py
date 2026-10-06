@@ -543,3 +543,18 @@ def test_old_databases_get_new_columns(env):
 
     with session_scope() as s:                               # SQLite-specific: read through the SQL repo in either test mode
         assert SqlRepo(s).get_case("CASE-OLD").cold_cost_usd == 0.0
+
+
+def test_auth_config_says_whether_demo_passwords_exist(client, monkeypatch):
+    assert client.get("/auth/config").json() == {"demo_passwords": True}      # the test env seeds demo users
+
+
+def test_eval_endpoint_returns_only_pipeline_runs(client, auth, tmp_path, monkeypatch):
+    import json
+    d = tmp_path / "evals"
+    d.mkdir()
+    (d / "official-dev.json").write_text(json.dumps({"ops": {}, "decision": {}, "classification": {}}))
+    (d / "calibrator.json").write_text(json.dumps({"x": [0, 1]}))
+    (d / "reranker.json").write_text(json.dumps([{"model": "m"}]))
+    monkeypatch.setenv("MEDISHIELD_EVAL_DIR", str(d))
+    assert list(client.get("/ops/eval", headers=auth("reviewer")).json()) == ["official-dev"]

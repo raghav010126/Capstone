@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, ShieldCheck } from "lucide-react"
+import { Loader2, LockKeyhole, Stethoscope, UserCheck } from "lucide-react"
+import { Brand } from "@/components/brand"
 import { useAuth } from "@/lib/auth"
-import { ApiError, ROLE_LABEL } from "@/lib/api"
+import { api, ApiError, ROLE_LABEL } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,6 +26,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Locally the demo accounts have known passwords (<user>-demo) and a click signs in. On the live site they have private
+  // passwords, so a click only fills the username.
+  const [demoPasswords, setDemoPasswords] = useState(false)
+  const [configLoaded, setConfigLoaded] = useState(false)
+  const passwordRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    api<{ demo_passwords: boolean }>("/auth/config")
+      .then((c) => setDemoPasswords(c.demo_passwords))
+      .catch(() => setDemoPasswords(false))
+      .finally(() => setConfigLoaded(true))
+  }, [])
 
   useEffect(() => {
     if (user) router.replace("/")
@@ -43,21 +56,48 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen place-items-center bg-muted/40 p-6">
-      <div className="w-full max-w-md space-y-6">
-        <div className="flex items-center justify-center gap-3">
-          <div className="grid size-11 place-items-center rounded-xl bg-primary text-primary-foreground">
-            <ShieldCheck className="size-6" />
+    <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
+      <aside className="relative hidden overflow-hidden bg-sidebar p-12 text-white lg:flex lg:flex-col lg:justify-between">
+        <div className="pointer-events-none absolute -right-24 -top-24 size-96 rounded-full bg-sidebar-primary/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -left-16 size-96 rounded-full bg-sidebar-primary/10 blur-3xl" />
+        <Brand tone="light" sub="Health Insurance · Claims Intake" />
+        <div className="relative max-w-md space-y-8">
+          <div className="space-y-3">
+            <h1 className="text-3xl font-semibold leading-tight tracking-tight">Claims decisions in minutes, not days.</h1>
+            <p className="text-white/75">
+              Claim forms, IDs, discharge summaries and prescriptions are read, verified against member records and policy, checked for
+              fraud and decided, with a human in the loop for anything uncertain.
+            </p>
           </div>
-          <div>
-            <div className="text-xl font-semibold tracking-tight">MediShield</div>
-            <div className="text-sm text-muted-foreground">Multi-agent document intake</div>
-          </div>
+          <ul className="space-y-4 text-sm">
+            {[
+              { icon: Stethoscope, title: "Clinical documents, understood", text: "ICD-10, CPT and NPI codes extracted and grounded on the page." },
+              { icon: UserCheck, title: "Role-based access, four-eyes approval", text: "High-value overrides need a second senior reviewer." },
+              { icon: LockKeyhole, title: "PHI protected, every action audited", text: "Redacted logs and a tamper-evident audit trail." },
+            ].map((f) => (
+              <li key={f.title} className="flex gap-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-white/10">
+                  <f.icon className="size-4.5 text-sidebar-primary" />
+                </span>
+                <span>
+                  <span className="block font-medium">{f.title}</span>
+                  <span className="text-white/70">{f.text}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
-        <Card>
+        <p className="relative text-xs text-white/50">Synthetic data for demonstration. No real member information is stored.</p>
+      </aside>
+      <div className="grid place-items-center bg-background p-6">
+      <div className="w-full max-w-md space-y-6">
+        <div className="lg:hidden">
+          <Brand />
+        </div>
+        <Card className="shadow-sm">
           <CardHeader>
             <CardTitle>Sign in</CardTitle>
-            <CardDescription>Use your account, or pick a demo role below.</CardDescription>
+            <CardDescription>{demoPasswords ? "Use your account, or pick a demo role below." : "Pick a role to fill in the username, then enter the password you were given."}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <form
@@ -73,7 +113,7 @@ export default function LoginPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <Input ref={passwordRef} id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
               {error && (
                 <p role="alert" className="text-sm text-reject">
@@ -89,15 +129,21 @@ export default function LoginPage() {
                 <span className="w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Demo accounts</span>
+                <span className="bg-card px-2 text-muted-foreground">{demoPasswords ? "Demo accounts" : "Accounts by role"}</span>
               </div>
             </div>
             <div className="grid gap-2">
               {DEMO.map((d) => (
                 <button
                   key={d.user}
-                  disabled={busy}
-                  onClick={() => submit(d.user, `${d.user}-demo`)}
+                  disabled={busy || !configLoaded}
+                  type="button"
+                  onClick={() => {
+                    if (demoPasswords) return submit(d.user, `${d.user}-demo`)
+                    setUsername(d.user)
+                    setError(null)
+                    passwordRef.current?.focus()
+                  }}
                   className="flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted disabled:opacity-50"
                 >
                   <span>
@@ -110,6 +156,7 @@ export default function LoginPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   )

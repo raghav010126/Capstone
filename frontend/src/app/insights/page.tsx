@@ -82,7 +82,7 @@ export default function InsightsPage() {
   const summary = useQuery({ queryKey: ["ops-summary"], queryFn: () => api<Summary>("/ops/summary"), enabled: allowed })
   const [pick, setPick] = useState<string | null>(null)
   const keys = Object.keys(results.data ?? {})
-  const key = pick ?? keys[0]
+  const key = pick ?? ["official-heldout", "official-dev"].find((k) => keys.includes(k)) ?? keys[0]
   const r = key ? results.data?.[key] : undefined
   const b = summary.data?.business_impact
 
