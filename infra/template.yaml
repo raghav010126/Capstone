@@ -169,7 +169,9 @@ Resources:
               - {Effect: Allow, Action: ["ssm:GetParametersByPath", "ssm:GetParameter"], Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmPrefix}*"}
               - Effect: Allow
                 Action: ["bedrock-agentcore:CreateEvent", "bedrock-agentcore:ListEvents", "bedrock-agentcore:GetEvent",
-                         "bedrock-agentcore:RetrieveMemoryRecords", "bedrock-agentcore:ListMemoryRecords"]
+                         "bedrock-agentcore:RetrieveMemoryRecords", "bedrock-agentcore:ListMemoryRecords",
+                         "bedrock-agentcore:ListSessions", "bedrock-agentcore:DeleteEvent",
+                         "bedrock-agentcore:DeleteMemoryRecord", "bedrock-agentcore:BatchDeleteMemoryRecords"]
                 Resource: !GetAtt ChatMemory.MemoryArn
 
   ChatMemory:
@@ -243,7 +245,7 @@ Resources:
       Architectures: [arm64]
       ImageConfig:                                          # same image as the agents, run through the Lambda runtime client
         EntryPoint: ["python", "-m", "awslambdaric"]
-        Command: ["medishield.aws_handlers.api_handler"]
+        Command: ["medishield.lambda_api.handler"]
         WorkingDirectory: /app
       Role: !GetAtt FunctionRole.Arn
       MemorySize: 1536
@@ -261,6 +263,19 @@ Resources:
           MEDISHIELD_DEMO_USERS: !Ref DemoUsers
           MEDISHIELD_VISION: !Ref VisionMode
           LANGSMITH_TRACING_V2: "false"
+
+  # keeps one API instance warm so signing in is not a cold start: 8,640 pings/month, well inside the Lambda free tier
+  ApiKeepWarm:
+    Type: AWS::Events::Rule
+    Condition: HasImage
+    Properties:
+      ScheduleExpression: rate(5 minutes)
+      Targets: [{Arn: !GetAtt ApiFunction.Arn, Id: keep-warm, Input: '{"warm": true}'}]
+
+  ApiKeepWarmPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasImage
+    Properties: {Action: "lambda:InvokeFunction", FunctionName: !Ref ApiFunction, Principal: events.amazonaws.com, SourceArn: !GetAtt ApiKeepWarm.Arn}
 
   ApiUrl:
     Type: AWS::Lambda::Url

@@ -15,7 +15,6 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 
-from medishield import pipeline
 from medishield.api.security import Principal, Role
 from medishield.config import get_settings
 from medishield.db import audit
@@ -99,6 +98,7 @@ def _apply(db: Repo, case, ov, resolver: str) -> None:
     db.save_override(ov)
     db.save_case(case)
     if was_waiting:                         # resume the paused graph from its checkpoint
+        from medishield import pipeline
         pipeline.resume_case(case.thread_id, {"decision": ov.decision, "reason": ov.reason_code,
                                               "reviewer": ov.requested_by, "approved_by": resolver},
                              # same session: a second connection would wait on this request's open write lock

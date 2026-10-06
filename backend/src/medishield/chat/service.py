@@ -73,6 +73,21 @@ def _needed(r: router.RouteOut) -> list[str]:
     return need
 
 
+def warm() -> dict:
+    """Load the policy search models now, so the first question does not pay for it (called when the chat page opens)."""
+    import threading
+
+    from medishield.rag.retrieve import get_store
+
+    threading.Thread(target=get_store, daemon=True, name="warm-policy-store").start()
+    return {"warming": True}
+
+
+def forget(payload: dict) -> dict:
+    """Delete the caller's assistant memory: conversations and long-term facts and preferences."""
+    return {"forgotten": get_memory().forget(payload["user"]["username"])}
+
+
 def answer(payload: dict) -> dict:
     u = payload["user"]
     user = Principal(u["username"], Role(u["role"]), u.get("display_name", u["username"]))
@@ -144,7 +159,7 @@ def answer(payload: dict) -> dict:
         src.guard(user, passages)
 
     if not passages:
-        return _result(("I couldn't find anything for that in the sources available to you. " + note).strip(), r.route, user,
+        return _result(" ".join(("I couldn't find anything for that in the sources available to you. " + note).split()), r.route, user,
                        conversation=conversation, how=how)
     numbered = "\n\n".join(f"[{i}] {p.title}" + (f" (p.{p.page})" if p.page else "") + f"\n{p.text}" for i, p in enumerate(passages, 1))
     recalled = memory.recall(user.username, q)

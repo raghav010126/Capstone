@@ -14,7 +14,6 @@ from pathlib import Path
 from medishield.config import get_settings
 from medishield.db import audit
 from medishield.db.repo import repo_scope
-from medishield.rag import ingest, retrieve
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +39,11 @@ def save_upload(plan: str, filename: str, data: bytes, uploader: str) -> int:
 
 
 def ingest_policy(policy_id: int) -> None:
+    from medishield.rag import (  # loaded here: the API only needs them when a policy is ingested
+        ingest,
+        retrieve,
+    )
+
     with repo_scope() as db:
         p = db.get_policy(policy_id)
         path, plan = policy_path(p), p.plan

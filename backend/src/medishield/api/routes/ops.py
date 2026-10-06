@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from medishield.api.deps import get_db
 from medishield.api.security import Principal, require
 from medishield.db.repo import Repo
-from medishield.llm import ledger
+from medishield.llm.cost import ledger  # not medishield.llm: that loads the model SDK
 
 router = APIRouter(tags=["ops"])
 # Business context from the assignment brief

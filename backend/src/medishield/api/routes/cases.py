@@ -28,7 +28,7 @@ from medishield.api.uploads import UploadError
 from medishield.config import get_settings
 from medishield.db import audit
 from medishield.db.repo import Repo, repo_scope
-from medishield.llm import BudgetExceeded, ledger
+from medishield.llm.cost import BudgetExceeded, ledger  # not medishield.llm: that loads the model SDK
 from medishield.schemas import (
     CaseDecision,
     ClaimsResult,

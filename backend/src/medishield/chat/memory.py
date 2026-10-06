@@ -38,6 +38,14 @@ class LocalMemory:
             self._turns[(user, conversation)] += [{"role": "user", "text": q}, {"role": "assistant", "text": a}]
             self._notes[user] = (self._notes[user] + [f"Asked: {q[:300]}"])[-50:]
 
+    def forget(self, user: str) -> int:
+        with self._lock:
+            keys = [k for k in self._turns if k[0] == user]
+            for k in keys:
+                del self._turns[k]
+            n = len(keys) + len(self._notes.pop(user, []))
+        return n
+
     def recall(self, user: str, question: str, k: int = 3) -> list[str]:
         words = set(re.findall(r"[a-z0-9]{4,}", question.lower()))
         with self._lock:
@@ -72,6 +80,31 @@ class AgentCoreMemory:
                                  eventTimestamp=datetime.now(UTC), payload=[
                                      {"conversational": {"role": "USER", "content": {"text": redact(question)[:2000]}}},
                                      {"conversational": {"role": "ASSISTANT", "content": {"text": redact(answer)[:4000]}}}])
+
+    def forget(self, user: str) -> int:
+        """Delete this user's conversations (short-term events) and long-term records."""
+        actor, removed = self._actor(user), 0
+        for ns in ("facts", "preferences"):
+            token = None
+            while True:
+                kw = {"memoryId": self.memory_id, "namespace": f"/users/{actor}/{ns}", "maxResults": 100}
+                if token:
+                    kw["nextToken"] = token
+                r = self.client.list_memory_records(**kw)
+                ids = [{"memoryRecordId": m["memoryRecordId"]} for m in r.get("memoryRecordSummaries", [])]
+                if ids:
+                    self.client.batch_delete_memory_records(memoryId=self.memory_id, records=ids)
+                    removed += len(ids)
+                token = r.get("nextToken")
+                if not token:
+                    break
+        sessions = self.client.list_sessions(memoryId=self.memory_id, actorId=actor, maxResults=100).get("sessionSummaries", [])
+        for sess in sessions:
+            sid = sess["sessionId"]
+            for ev in self.client.list_events(memoryId=self.memory_id, actorId=actor, sessionId=sid, maxResults=100).get("events", []):
+                self.client.delete_event(memoryId=self.memory_id, actorId=actor, sessionId=sid, eventId=ev["eventId"])
+                removed += 1
+        return removed
 
     def recall(self, user: str, question: str, k: int = 3) -> list[str]:
         out = []

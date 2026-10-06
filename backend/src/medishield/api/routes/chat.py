@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 
 from medishield.api import schemas as S
@@ -13,6 +13,15 @@ from medishield.api.security import Principal, current_user, limiter
 from medishield.config import get_settings
 
 router = APIRouter(tags=["chat"])
+
+
+def _run(payload: dict) -> dict:
+    """The assistant runtime on AWS, in-process locally."""
+    if get_settings().assistant_runtime_arn:
+        return _invoke_runtime(payload)
+    from medishield.chat import service
+
+    return {"chat": service.answer, "warm": lambda p: service.warm(), "forget": service.forget}[payload["task"]](payload)
 
 
 def _invoke_runtime(payload: dict) -> dict:
@@ -53,12 +62,29 @@ async def chat(body: S.ChatRequest, user: Principal = Depends(current_user)):
     limiter.check(f"chat:{user.username}", get_settings().chat_rate_per_min)
     payload = {"task": "chat", "question": body.question, "conversation_id": body.conversation_id or uuid.uuid4().hex,
                "user": {"username": user.username, "role": user.role.value, "display_name": user.display_name}}
-    if get_settings().assistant_runtime_arn:
-        out = await run_in_threadpool(_invoke_runtime, payload)
-    else:
-        from medishield.chat.service import answer
-
-        out = await run_in_threadpool(answer, payload)
+    out = await run_in_threadpool(_run, payload)
     if "error" in out and "answer" not in out:
         raise HTTPException(502, out["error"])
     return out
+
+
+@router.post("/chat/warm", status_code=202)
+async def chat_warm(conversation_id: str = Query(default="warm", pattern=r"^[A-Za-z0-9_-]{4,100}$"),
+                    user: Principal = Depends(current_user)):
+    """Start the assistant (and load its search models) before the first question. No model call, no cost.
+
+    AgentCore gives every session its own microVM, so this warms the session the conversation will use."""
+    payload = {"task": "warm", "conversation_id": conversation_id, "user": {"username": user.username, "role": user.role.value}}
+    try:
+        await run_in_threadpool(_run, payload)
+    except Exception as e:  # noqa: BLE001 - warming is best-effort
+        return {"warming": False, "reason": type(e).__name__}
+    return {"warming": True}
+
+
+@router.delete("/chat/memory")
+async def chat_forget(user: Principal = Depends(current_user)):
+    """Delete everything the assistant remembers about the caller (conversations, facts, preferences)."""
+    payload = {"task": "forget", "conversation_id": f"forget-{uuid.uuid4().hex}",
+               "user": {"username": user.username, "role": user.role.value}}
+    return await run_in_threadpool(_run, payload)

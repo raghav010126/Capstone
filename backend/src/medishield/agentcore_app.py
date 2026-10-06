@@ -65,10 +65,10 @@ def invoke(payload: dict, context=None) -> dict:
         if task == "ingest_policy":
             _background(_run_policy, int(payload["policy_id"]), "ingest_policy")
             return {"accepted": True, "task": task, "policy_id": payload["policy_id"]}
-    if ROLE == "assistant" and task == "chat":
-        from medishield.chat.service import answer  # the chat module (role-aware assistant)
+    if ROLE == "assistant" and task in ("chat", "warm", "forget"):
+        from medishield.chat import service  # the role-aware assistant
 
-        return answer(payload)
+        return {"chat": service.answer, "warm": lambda p: service.warm(), "forget": service.forget}[task](payload)
     return {"error": f"unsupported task {task!r} for the {ROLE} runtime"}
 
 

@@ -3,7 +3,8 @@
 import { Fragment, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { BookOpen, Database, FileSearch, Lock, MessageSquarePlus, Send, ShieldCheck, Sparkles } from "lucide-react"
+import { BookOpen, Database, Eraser, FileSearch, Lock, MessageSquarePlus, Send, ShieldCheck, Sparkles } from "lucide-react"
+import { toast } from "sonner"
 import { api, ApiError, type ChatResponse, type ChatScope } from "@/lib/api"
 import { AppShell } from "@/components/app-shell"
 import { Badge } from "@/components/ui/badge"
@@ -12,7 +13,17 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-type Turn = { id: number; question: string; reply?: ChatResponse; error?: string }
+type Turn = { id: number; question: string; reply?: ChatResponse; error?: string; started: number }
+
+/** Seconds since the question was sent, while the answer is on its way. */
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(t)
+  }, [])
+  return <span className="tabular-nums">{Math.max(0, Math.round((now - since) / 1000))} s</span>
+}
 
 const KIND_ICON: Record<string, typeof BookOpen> = { policy: BookOpen, exclusion: FileSearch, data: Database }
 
@@ -42,7 +53,12 @@ function Cited({ text, turn }: { text: string; turn: number }) {
 function Reply({ turn }: { turn: Turn }) {
   const r = turn.reply
   if (turn.error) return <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">{turn.error}</div>
-  if (!r) return <div className="animate-pulse text-sm text-muted-foreground">Thinking… (the first answer after a pause can take ~20 s while the agent starts)</div>
+  if (!r)
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="size-2 animate-pulse rounded-full bg-primary" /> Checking your sources… <Elapsed since={turn.started} />
+      </div>
+    )
   const cited = r.sources.filter((s) => s.cited)
   return (
     <div
@@ -110,6 +126,22 @@ export default function ChatPage() {
       ),
   })
 
+  // start the assistant and load its search models while the user is still typing (no model call, no cost)
+  // (AgentCore runs each conversation in its own microVM, so warm the one this conversation will use)
+  useEffect(() => {
+    api(`/chat/warm?conversation_id=${conversation}`, { method: "POST" }).catch(() => undefined)
+  }, [conversation])
+
+  const forget = useMutation({
+    mutationFn: () => api<{ forgotten: number }>("/chat/memory", { method: "DELETE" }),
+    onSuccess: () => {
+      setTurns([])
+      setConversation(newConversation())
+      toast.success("The assistant's memory of your conversations has been deleted")
+    },
+    onError: () => toast.error("Could not clear the assistant's memory"),
+  })
+
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: "smooth" })     // block body: newer browsers return a Promise here, React wants nothing
   }, [turns])
@@ -118,7 +150,7 @@ export default function ChatPage() {
     const q = question.trim()
     if (!q || send.isPending) return
     const id = ++seq.current
-    setTurns((t) => [...t, { id, question: q }])
+    setTurns((t) => [...t, { id, question: q, started: Date.now() }])
     setText("")
     send.mutate({ id, question: q })
   }
@@ -129,9 +161,14 @@ export default function ChatPage() {
       subtitle="Ask about policies, cases and operations. Answers cite their sources; what you can ask depends on your role."
       requires="policy:ask"
       actions={
-        <Button variant="outline" size="sm" onClick={() => (setTurns([]), setConversation(newConversation()))}>
-          <MessageSquarePlus /> New conversation
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" disabled={forget.isPending} onClick={() => forget.mutate()} title="Delete what the assistant remembers about you">
+            <Eraser /> Clear my memory
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => (setTurns([]), setConversation(newConversation()))}>
+            <MessageSquarePlus /> New conversation
+          </Button>
+        </div>
       }
     >
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
@@ -209,7 +246,7 @@ export default function ChatPage() {
               </ul>
               <p className="text-xs text-muted-foreground">
                 Enforced where the data is read (policy search, case lookups, a read-only per-role analytics database), not just in this page. Blocked
-                questions are written to the audit log.
+                questions are written to the audit log. The assistant remembers your earlier questions (personal details redacted) until you clear it.
               </p>
             </CardContent>
           </Card>

@@ -9,7 +9,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from medishield import pipeline
 from medishield.api.security import Principal, redact
 from medishield.api.uploads import Page, UploadError, normalise
 from medishield.config import get_settings
@@ -17,7 +16,7 @@ from medishield.db import audit
 from medishield.db.models import Case, Document
 from medishield.db.repo import Repo, repo_scope
 from medishield.fraud.rules import norm_claim_no
-from medishield.llm import BudgetExceeded
+from medishield.llm.cost import BudgetExceeded
 from medishield.records import ProcessedClaim, get_records
 from medishield.schemas import DocType
 from medishield.storage.base import get_storage
@@ -135,6 +134,8 @@ def rebuild_registry() -> int:
 
 def process_case(case_id: str) -> None:
     """Worker entry point: run the graph for a stored case and persist the outcome."""
+    from medishield import pipeline  # imported here: the API never runs the graph, and it is slow to load
+
     storage = get_storage()
     with repo_scope() as db:
         case = db.get_case(case_id)

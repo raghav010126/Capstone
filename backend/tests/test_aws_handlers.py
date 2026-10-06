@@ -113,3 +113,13 @@ def test_large_cases_upload_straight_to_s3(aws, monkeypatch):
     assert not s3.list_objects_v2(Bucket="docs", Prefix="uploads/").get("Contents")      # temporary uploads are removed
     code, _ = call(function_url_event("POST", "/api/cases/uploads", json.dumps({"files": [{"filename": "x.png", "size": 50_000_000}]}), sub))
     assert code == 413
+
+
+def test_lambda_api_answers_the_keep_warm_ping_without_touching_the_app(aws):
+    import importlib
+
+    from medishield import lambda_api
+    importlib.reload(lambda_api)                                     # runs the init phase under the moto environment
+    assert lambda_api.handler({"warm": True}, None) == {"warm": True}
+    out = lambda_api.handler(function_url_event("GET", "/api/healthz"), None)
+    assert out["statusCode"] == 200
