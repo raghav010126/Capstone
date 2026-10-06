@@ -215,6 +215,8 @@ class PolicyOut(BaseModel):
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     conversation_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{8,100}$")
+    case_id: str | None = Field(default=None, pattern=r"^CASE-[0-9A-Fa-f]{8}$",
+                                description="asked from this case's page: the question is about it (access is still checked)")
 
 
 class ChatSource(BaseModel):

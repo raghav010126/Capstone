@@ -62,6 +62,8 @@ async def chat(body: S.ChatRequest, user: Principal = Depends(current_user)):
     limiter.check(f"chat:{user.username}", get_settings().chat_rate_per_min)
     payload = {"task": "chat", "question": body.question, "conversation_id": body.conversation_id or uuid.uuid4().hex,
                "user": {"username": user.username, "role": user.role.value, "display_name": user.display_name}}
+    if body.case_id:                                  # "Ask about this case"; the case tool still checks the user may see it
+        payload["case_id"] = body.case_id.upper()
     out = await run_in_threadpool(_run, payload)
     if "error" in out and "answer" not in out:
         raise HTTPException(502, out["error"])
