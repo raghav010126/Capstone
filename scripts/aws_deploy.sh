@@ -49,14 +49,24 @@ if ! aws ssm get-parameter --name /medishield/admin_password >/dev/null 2>&1; th
   echo "  admin login written to .aws-admin-login (git-ignored)"
 fi
 
-echo "== build the images in CodeBuild (app; policy ingest unless POLICY_INGEST=0)"
+echo "== build the images in CodeBuild"
 TAG="$(date +%Y%m%d%H%M%S)"
-INGEST_TAG="ingest-$TAG"; [ "${POLICY_INGEST:-1}" = 1 ] || INGEST_TAG=none
+# POLICY_INGEST: 1 (default) builds a new Docling ingest image; reuse keeps the deployed one (saves ~15 build minutes when
+# only the app changed); 0 removes the ingest function
+case "${POLICY_INGEST:-1}" in
+  reuse) INGEST_TAG="$(aws cloudformation describe-stacks --stack-name "$STACK" \
+           --query "Stacks[0].Parameters[?ParameterKey=='IngestImageTag'].ParameterValue" --output text 2>/dev/null)"
+         case "$INGEST_TAG" in ""|None) INGEST_TAG=none ;; esac
+         BUILD_INGEST=none ;;
+  0)     INGEST_TAG=none; BUILD_INGEST=none ;;
+  *)     INGEST_TAG="ingest-$TAG"; BUILD_INGEST="$INGEST_TAG" ;;
+esac
+echo "  app image $TAG, policy ingest image $INGEST_TAG$([ "$BUILD_INGEST" = none ] && echo ' (not rebuilt)')"
 uv run --python 3.12 python scripts/aws_bundle.py build/source.zip
 aws s3 cp build/source.zip "s3://$(out SourceBucketName)/source.zip" --only-show-errors
 BUILD_ID="$(aws codebuild start-build --project-name "$(out BuildProject)" --query build.id --output text \
   --timeout-in-minutes-override 60 \
-  --environment-variables-override name=IMAGE_TAG,value="$TAG" name=INGEST_TAG,value="$INGEST_TAG")"   # 60: a cap for two images, billed per minute used
+  --environment-variables-override name=IMAGE_TAG,value="$TAG" name=INGEST_TAG,value="$BUILD_INGEST")"   # 60: a cap for two images, billed per minute used
 while :; do
   S="$(aws codebuild batch-get-builds --ids "$BUILD_ID" --query 'builds[0].buildStatus' --output text)"
   [ "$S" = IN_PROGRESS ] || break; sleep 20
