@@ -15,9 +15,11 @@ Parameters:
   DemoUsers: {Type: String, Default: "1", AllowedValues: ["0", "1"], Description: "1 creates the five demo accounts (documented in the README)"}
   VisionMode: {Type: String, Default: auto, AllowedValues: [auto, always]}
   SsmPrefix: {Type: String, Default: /medishield/}
+  InboundEmailDomain: {Type: String, Default: "", Description: "Optional email intake: a domain verified in SES (receiving regions only, e.g. us-east-1). Mail to intake@<domain> becomes a case. Empty creates nothing"}
 
 Conditions:
   HasImage: !Not [!Equals [!Ref ImageTag, none]]
+  HasInboundEmail: !And [!Condition HasImage, !Not [!Equals [!Ref InboundEmailDomain, ""]]]
 
 Resources:
   # ── image registry and builder (no Docker needed on the laptop) ────────────────────────────────────
@@ -96,6 +98,7 @@ Resources:
         Rules:
           - {Id: expire, Status: Enabled, ExpirationInDays: 60}
           - {Id: abandoned-uploads, Status: Enabled, Prefix: uploads/, ExpirationInDays: 1}
+          - !If [HasInboundEmail, {Id: inbound-mail, Status: Enabled, Prefix: inbound/, ExpirationInDays: 3}, !Ref "AWS::NoValue"]
       CorsConfiguration:                       # browsers upload case files straight to S3 with one-time signed forms
         CorsRules: [{AllowedMethods: [POST], AllowedOrigins: ["*"], AllowedHeaders: ["*"], MaxAge: 3000}]
       BucketEncryption: {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]}
@@ -358,6 +361,87 @@ Resources:
             Resource: !Sub "${WebBucket.Arn}/*"
             Condition: {StringEquals: {"AWS:SourceArn": !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${Site}"}}
 
+  # ── optional email intake (only when InboundEmailDomain is set; per-message billing, nothing idles) ─────
+  # SES stores mail for intake@<domain> under inbound/ in the documents bucket, then invokes the email function, which
+  # checks the SES verdicts and the sender allow-list (/medishield/intake_senders) before it creates a case.
+  # CloudFormation cannot activate a receipt rule set: see docs/aws.md for the one-time activation and the DNS records.
+  InboundMailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: HasInboundEmail
+    Properties:
+      Bucket: !Ref DocsBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ses.amazonaws.com}
+            Action: "s3:PutObject"
+            Resource: !Sub "${DocsBucket.Arn}/inbound/*"
+            Condition:
+              StringEquals: {"AWS:SourceAccount": !Ref "AWS::AccountId"}
+              ArnLike: {"AWS:SourceArn": !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:receipt-rule-set/${Project}-inbound:receipt-rule/*"}
+
+  EmailLogs:
+    Type: AWS::Logs::LogGroup
+    Condition: HasInboundEmail
+    Properties: {LogGroupName: !Sub "/aws/lambda/${Project}-email", RetentionInDays: 7}
+
+  EmailFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasInboundEmail
+    DependsOn: EmailLogs
+    Properties:
+      FunctionName: !Sub "${Project}-email"
+      PackageType: Image
+      Code: {ImageUri: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repo}:${ImageTag}"}
+      Architectures: [arm64]
+      ImageConfig:                                          # the same image as the API, a different handler
+        EntryPoint: ["python", "-m", "awslambdaric"]
+        Command: ["medishield.intake.ses.handler"]
+        WorkingDirectory: /app
+      Role: !GetAtt FunctionRole.Arn
+      MemorySize: 1536
+      Timeout: 120
+      Environment:
+        Variables:
+          DYNAMO_TABLE: !Ref Table
+          S3_BUCKET: !Ref DocsBucket
+          PIPELINE_RUNTIME_ARN: !GetAtt PipelineRuntime.AgentRuntimeArn
+          SSM_PREFIX: !Ref SsmPrefix
+          MEDISHIELD_BUDGET_USD: !Ref ModelBudgetUsd
+          MEDISHIELD_DAILY_BUDGET_USD: !Ref DailyModelBudgetUsd
+          LANGSMITH_TRACING_V2: "false"
+
+  EmailInvokeFromSes:
+    Type: AWS::Lambda::Permission
+    Condition: HasInboundEmail
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref EmailFunction
+      Principal: ses.amazonaws.com
+      SourceAccount: !Ref "AWS::AccountId"
+      SourceArn: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:receipt-rule-set/${Project}-inbound:receipt-rule/${Project}-intake"
+
+  InboundRuleSet:
+    Type: AWS::SES::ReceiptRuleSet
+    Condition: HasInboundEmail
+    Properties: {RuleSetName: !Sub "${Project}-inbound"}
+
+  InboundRule:
+    Type: AWS::SES::ReceiptRule
+    Condition: HasInboundEmail
+    DependsOn: [InboundMailBucketPolicy, EmailInvokeFromSes]   # SES checks both permissions when the rule is created
+    Properties:
+      RuleSetName: !Ref InboundRuleSet
+      Rule:
+        Name: !Sub "${Project}-intake"
+        Enabled: true
+        Recipients: [!Sub "intake@${InboundEmailDomain}"]
+        ScanEnabled: true                                   # spam and virus verdicts
+        TlsPolicy: Require                                  # mail carrying PHI must arrive over TLS
+        Actions:
+          - S3Action: {BucketName: !Ref DocsBucket, ObjectKeyPrefix: inbound/}
+          - LambdaAction: {FunctionArn: !GetAtt EmailFunction.Arn, InvocationType: Event}
+
   # ── cost alert ────────────────────────────────────────────────────────────────────────────────────
   Budget:
     Type: AWS::Budgets::Budget
@@ -387,3 +471,5 @@ Outputs:
   PipelineRuntimeArn: {Condition: HasImage, Value: !GetAtt PipelineRuntime.AgentRuntimeArn}
   AssistantRuntimeArn: {Condition: HasImage, Value: !GetAtt AssistantRuntime.AgentRuntimeArn}
   ChatMemoryId: {Condition: HasImage, Value: !GetAtt ChatMemory.MemoryId}
+  InboundEmailAddress: {Condition: HasInboundEmail, Value: !Sub "intake@${InboundEmailDomain}"}
+  InboundRuleSetName: {Condition: HasInboundEmail, Value: !Ref InboundRuleSet}

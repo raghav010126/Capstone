@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from medishield.api.routes import audit, auth, cases, chat, ops, policies, review
+from medishield.api.routes import intake as email_intake
 from medishield.api.security import Role, hash_password, install_log_redaction
 from medishield.config import get_settings
 from medishield.db.repo import repo_scope
@@ -90,6 +91,7 @@ def create_app() -> FastAPI:
 
     for r in (auth.router, cases.router, review.router, audit.router, policies.router, ops.router, chat.router):
         app.include_router(r)
+    app.include_router(email_intake.router)
     return app
 
 

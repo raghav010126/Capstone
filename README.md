@@ -82,7 +82,7 @@ flowchart LR
 
 | Brief component | Implementation | Model / tool |
 |---|---|---|
-| Ingestion API | FastAPI multipart upload or direct-to-S3 signed forms; PNG/JPEG/PDF/TIFF; magic-byte checks, size and page limits, PDF→pages, idempotency keys | — |
+| Ingestion API | FastAPI multipart upload or direct-to-S3 signed forms; PNG/JPEG/PDF/TIFF; magic-byte checks, size and page limits, PDF→pages, idempotency keys. Email too: `POST /intake/email` (.eml) and optional SES inbound mail from allow-listed senders ([docs/aws.md](docs/aws.md#email-intake-optional)) | — |
 | Classifier agent | Vision LLM + deterministic title-keyword evidence; confidence comes from **agreement × image quality**, not the model's self-report. Low confidence or UNKNOWN goes to review | Sonnet 5.5, Opus 5.5 retry |
 | OCR / pre-processor | RapidOCR (local, free) + quality metrics; extractor grounds **every field** against the OCR lines and returns `{fields, raw_text, bounding_boxes}` | RapidOCR, Sonnet 5.5 |
 | KYC agent | Member DB match, expiry **at the date of service**, typography forensics (retyped dates), advisory ELA, two-model visual tamper review, near-miss name rule | Sonnet + Opus agreement |
