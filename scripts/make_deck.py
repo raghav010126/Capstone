@@ -184,10 +184,10 @@ for i, (t, sub) in enumerate(steps):
     tf.paragraphs[0].runs[0].font.color.rgb, tf.paragraphs[0].runs[0].font.name = WHITE, FONT
     tf.paragraphs[0].alignment = PP_ALIGN.CENTER
     text(s, x, Inches(3.2), cw, Inches(0.7), sub, 12, MUTED, align=PP_ALIGN.CENTER)
-for i, (t, d) in enumerate([("Models read, rules decide", "Claude reads documents and writes explanations; a versioned rule file "
-                                                          "decides. An injected \"APPROVE\" can't decide a case."),
-                            ("Evidence, not opinion", "Confidence comes from grounding, agent agreement and image quality, then "
-                                                      "is calibrated. Uncertain → human."),
+for i, (t, d) in enumerate([("Models read, rules decide", ("Claude reads documents and writes explanations; a versioned rule file "
+                                                          "decides. An injected \"APPROVE\" can't decide a case.")),
+                            ("Evidence, not opinion", ("Confidence comes from grounding, agent agreement and image quality, then "
+                                                      "is calibrated. Uncertain → human.")),
                             ("Every step auditable", "Hash-chained audit log, per-agent outputs in the UI, PDF case report.")]):
     x = Inches(0.7 + i * 4.1)
     box(s, x, Inches(4.35), Inches(3.85), Inches(2.25), MINT, None)
@@ -253,8 +253,8 @@ tiles = [(pct(held["classification"]["accuracy"]), "classification", "6 document
 for i, (v, l, sub) in enumerate(tiles):
     stat(s, Inches(0.7 + i * 3.05), Inches(1.85), Inches(2.8), Inches(2.0), v, l, TEAL, sub)
 tiles2 = [(f"${cost_case:.2f}", "model cost per case", f"≈ ${cost_doc:.2f} per document vs ≈ ${manual_doc:.0f} manual**"),
-          (f"{pct(seed['decision']['accuracy_visible'])}", "unseen generator seed", f"{pct(seedc['decision']['accuracy_visible'])} with "
-                                                                                 "tampering drawn in"),
+          (f"{pct(seed['decision']['accuracy_visible'])}", "unseen generator seed", (f"{pct(seedc['decision']['accuracy_visible'])} with "
+                                                                                 "tampering drawn in")),
           (str(rt["flips"]), "prompt-injection flips", f"{rt['attacks']} adversarial documents"),
           ("21 / 21", "quality gates in CI", "accuracy · safety · cost thresholds")]
 for i, (v, l, sub) in enumerate(tiles2):
@@ -267,8 +267,8 @@ footer(s, 6)
 # ── 7. trust ────────────────────────────────────────────────────────────────────────────────────────
 s = prs.slides.add_slide(BLANK)
 header(s, "Built for a regulated business", "Safety and trust")
-items = [("Roles and four-eyes", "One permission matrix for API, UI and assistant. Overrides over $10k need a second senior reviewer; "
-                                 "nobody approves their own."),
+items = [("Roles and four-eyes", ("One permission matrix for API, UI and assistant. Overrides over $10k need a second senior reviewer; "
+                                 "nobody approves their own.")),
          ("Tamper-evident audit", "Every view, override, report and blocked question is hash-chained; edits or deletions are located."),
          ("Injection-proof decisions", "Document text is data. Rules decide over grounded facts; red team: 0 flips, poisoned policy held."),
          ("Identity and tampering", "Expiry at the date of service, typography forensics, ELA heatmap, two-model visual agreement."),
@@ -292,8 +292,8 @@ header(s, "Ask the system, within your role", "Role-aware assistant")
 picture(s, SHOTS / "assistant.png", Inches(6.3), Inches(1.75), Inches(6.35), Inches(4.4))
 for i, (t, dsc) in enumerate([
         ("Answers with citations", "Policy clause and page, case evidence, audit entries, each as a numbered link."),
-        ("Blocked by role, at the data", "Policy search, case tools and a per-role read-only SQL database enforce access; "
-                                         "the model never sees what you may not."),
+        ("Blocked by role, at the data", ("Policy search, case tools and a per-role read-only SQL database enforce access; "
+                                         "the model never sees what you may not.")),
         ("Remembers, privately", "Follow-ups and per-user memory on AgentCore Memory; health data redacted; one-click clear."),
         (f"{pct(chat_eval['accuracy'])} on {chat_eval['questions']} labelled questions",
          f"refusals, routing, facts, citations · red team {chat_rt['attacks']} attacks, {chat_rt['failures']} failures")]):
