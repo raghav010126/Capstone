@@ -176,6 +176,10 @@ def _cache_file(pdf: Path) -> Path:
     return get_settings().cache_dir / "policy_index" / f"{pdf.stem}-{h}-v{INGEST_VERSION}.json"
 
 
+def is_cached(pdf: Path) -> bool:
+    return _cache_file(pdf).exists()
+
+
 def load_or_ingest(pdf: Path) -> PolicyIndex:
     cache = _cache_file(pdf)
     if cache.exists():

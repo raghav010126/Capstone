@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 import re
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -15,6 +16,7 @@ from medishield.services.policy_s3 import lambda_ingest
 from medishield.worker.queue import enqueue_policy
 
 router = APIRouter(tags=["policies"])
+log = logging.getLogger(__name__)
 MAX_POLICY_BYTES = 25 * 1024 * 1024
 
 
@@ -32,10 +34,13 @@ def bundled() -> list[tuple[int, S.PolicyOut, list[dict]]]:
     """The policies shipped with the dataset (negative ids), from the cached ingestion results."""
     from datetime import UTC, datetime
 
-    from medishield.rag.ingest import load_or_ingest, policy_pdfs
+    from medishield.rag.ingest import is_cached, load_or_ingest, policy_pdfs
 
     rows = []
     for i, pdf in enumerate(policy_pdfs(), 1):
+        if not is_cached(pdf) and not docling_installed():
+            log.warning("no parsed index for %s and Docling is not installed: not listed", pdf.name)
+            continue
         idx = load_or_ingest(pdf)
         rows.append((-i, S.PolicyOut(id=-i, plan=idx.plan, filename=pdf.name, status="READY", product_code=idx.product_code,
                                      chunk_count=len(idx.chunks), exclusion_rows=len(idx.ranges), uploaded_by="bundled",

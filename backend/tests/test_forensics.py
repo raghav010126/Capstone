@@ -13,7 +13,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 MEMBER = {"member_id": "PT_1", "policy_number": "MED-GLD-1234567", "full_name": "Ann Lee", "dob": "1980-01-02",
           "status": "ACTIVE", "plan": "GOLD"}
-ARIAL = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+ARIAL = next((f for f in ("/System/Library/Fonts/Supplemental/Arial Bold.ttf",       # macOS
+                          "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",       # Linux (CI)
+                          "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf") if Path(f).exists()), None)
 
 
 def card(tmp_path, size_exp=18, name="card.png"):
@@ -22,7 +24,7 @@ def card(tmp_path, size_exp=18, name="card.png"):
     d = ImageDraw.Draw(img)
     lines = []
     for y, text, size in ((120, "04/25/1954", 18), (200, "12/31/2029", size_exp)):
-        f = ImageFont.truetype(ARIAL, size)
+        f = ImageFont.truetype(ARIAL, size) if ARIAL else ImageFont.load_default(size)
         d.text((200, y), text, font=f, fill=(0, 0, 0))
         l, t, r, b = d.textbbox((200, y), text, font=f)
         lines.append(OcrLine(id=len(lines), text=text, box=(l, t, r, b), score=0.99))
