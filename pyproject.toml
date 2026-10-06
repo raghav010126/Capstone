@@ -35,6 +35,7 @@ dependencies = [
     "mangum>=0.22.0",
     "pypdfium2>=5.14.0",
     "bedrock-agentcore>=1.24.0",
+    "mcp>=1.20",
 ]
 
 [dependency-groups]
