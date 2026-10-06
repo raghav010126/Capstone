@@ -6,7 +6,7 @@
 #   * PyTorch from its CPU-only index: the PyPI wheels pull in CUDA, several GB that a CPU-only Lambda never uses
 #   * Docling's models are baked in, and the build parses a bundled policy with the network off as an unprivileged user, so the
 #     function never downloads anything or writes outside /tmp at run time
-FROM --platform=linux/arm64 python:3.12-slim
+FROM --platform=linux/arm64 public.ecr.aws/docker/library/python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PYTHONPATH=/app
 WORKDIR /app

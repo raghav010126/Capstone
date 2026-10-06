@@ -2,7 +2,8 @@
 #   * AgentCore Runtimes (pipeline, assistant) run the image's default command: the AgentCore HTTP server on :8080
 #   * the API Lambda overrides entrypoint/command with the Lambda runtime interface client (awslambdaric)
 # AgentCore requires ARM64 and an image of at most 2 GB, so Docling/PyTorch are left out and the reranker is the 0.15 GB one.
-FROM --platform=linux/arm64 python:3.12-slim
+# the official image through AWS's public mirror: Docker Hub rate-limits CodeBuild's shared IPs (HTTP 429)
+FROM --platform=linux/arm64 public.ecr.aws/docker/library/python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PYTHONPATH=/app
 WORKDIR /app
