@@ -1519,6 +1519,33 @@
     ]
    }
   },
+  "/ops/quality": {
+   "get": {
+    "tags": [
+     "ops"
+    ],
+    "summary": "Quality",
+    "description": "AI quality monitor: how human reviewers agree with the AI (overrides, reason codes, the rules they overturn,\nreclassifications, four-eyes outcomes), for all time and for cases created in the last 30 days. Recorded data only;\nno model calls.",
+    "operationId": "quality_ops_quality_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QualityOut"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
   "/chat/scope": {
    "get": {
     "tags": [
@@ -1654,6 +1681,58 @@
       "content": {
        "application/json": {
         "schema": {}
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/intake/email": {
+   "post": {
+    "tags": [
+     "intake"
+    ],
+    "summary": "Email Intake",
+    "description": "Create a case from the PDF/PNG/JPEG/TIFF attachments of one email, owned by the caller. The From address must be\non the intake allow-list (``INTAKE_SENDERS``), and a submitter may only send mail from an address mapped to them.\nIdempotent on the Message-ID: the same message again returns the first case (200).",
+    "operationId": "email_intake_intake_email_post",
+    "requestBody": {
+     "content": {
+      "message/rfc822": {
+       "schema": {
+        "type": "string",
+        "format": "binary"
+       }
+      },
+      "multipart/form-data": {
+       "schema": {
+        "properties": {
+         "file": {
+          "type": "string",
+          "format": "binary"
+         }
+        },
+        "type": "object",
+        "required": [
+         "file"
+        ]
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CaseCreated"
+        }
        }
       }
      }
@@ -2297,6 +2376,19 @@
        }
       ],
       "title": "Conversation Id"
+     },
+     "case_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^CASE-[0-9A-Fa-f]{8}$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Case Id",
+      "description": "asked from this case's page: the question is about it (access is still checked)"
      }
     },
     "type": "object",
@@ -2703,6 +2795,50 @@
     ],
     "title": "CodeCoverage"
    },
+   "ConfidenceSplit": {
+    "properties": {
+     "confirmed": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Confirmed",
+      "description": "mean AI confidence where the human kept the AI decision"
+     },
+     "overridden": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Overridden",
+      "description": "mean AI confidence where the human changed it"
+     },
+     "n_confirmed": {
+      "type": "integer",
+      "title": "N Confirmed"
+     },
+     "n_overridden": {
+      "type": "integer",
+      "title": "N Overridden"
+     }
+    },
+    "type": "object",
+    "required": [
+     "confirmed",
+     "overridden",
+     "n_confirmed",
+     "n_overridden"
+    ],
+    "title": "ConfidenceSplit"
+   },
    "CoverageStatus": {
     "type": "string",
     "enum": [
@@ -3044,6 +3180,34 @@
      "grounded"
     ],
     "title": "ExtractedField"
+   },
+   "FourEyes": {
+    "properties": {
+     "requested": {
+      "type": "integer",
+      "title": "Requested"
+     },
+     "approved": {
+      "type": "integer",
+      "title": "Approved"
+     },
+     "rejected": {
+      "type": "integer",
+      "title": "Rejected"
+     },
+     "pending": {
+      "type": "integer",
+      "title": "Pending"
+     }
+    },
+    "type": "object",
+    "required": [
+     "requested",
+     "approved",
+     "rejected",
+     "pending"
+    ],
+    "title": "FourEyes"
    },
    "FraudAnomaly": {
     "properties": {
@@ -3565,6 +3729,239 @@
     ],
     "title": "QualityMetrics"
    },
+   "QualityOut": {
+    "properties": {
+     "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Generated At"
+     },
+     "window_days": {
+      "type": "integer",
+      "title": "Window Days"
+     },
+     "all_time": {
+      "$ref": "#/components/schemas/QualityWindow"
+     },
+     "recent": {
+      "$ref": "#/components/schemas/QualityWindow"
+     }
+    },
+    "type": "object",
+    "required": [
+     "generated_at",
+     "window_days",
+     "all_time",
+     "recent"
+    ],
+    "title": "QualityOut"
+   },
+   "QualityWindow": {
+    "properties": {
+     "since": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Since",
+      "description": "cohort start (cases created on or after); null for all time"
+     },
+     "cases_decided": {
+      "type": "integer",
+      "title": "Cases Decided"
+     },
+     "escalation_rate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Escalation Rate"
+     },
+     "human_reviewed": {
+      "type": "integer",
+      "title": "Human Reviewed"
+     },
+     "awaiting_review": {
+      "type": "integer",
+      "title": "Awaiting Review"
+     },
+     "human_resolved": {
+      "type": "integer",
+      "title": "Human Resolved"
+     },
+     "overrides_applied": {
+      "type": "integer",
+      "title": "Overrides Applied"
+     },
+     "applied_override_rate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Applied Override Rate",
+      "description": "decided cases with an applied override / cases decided"
+     },
+     "agreement_rate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Agreement Rate"
+     },
+     "agreement_rate_approve_reject": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Agreement Rate Approve Reject"
+     },
+     "reason_codes": {
+      "items": {
+       "$ref": "#/components/schemas/ReasonCount"
+      },
+      "type": "array",
+      "title": "Reason Codes"
+     },
+     "rules": {
+      "items": {
+       "$ref": "#/components/schemas/RuleOverrides"
+      },
+      "type": "array",
+      "title": "Rules"
+     },
+     "transitions": {
+      "items": {
+       "$ref": "#/components/schemas/Transition"
+      },
+      "type": "array",
+      "title": "Transitions"
+     },
+     "confidence": {
+      "$ref": "#/components/schemas/ConfidenceSplit"
+     },
+     "reclassifications": {
+      "type": "integer",
+      "title": "Reclassifications"
+     },
+     "reclassification_types": {
+      "items": {
+       "$ref": "#/components/schemas/Reclassification"
+      },
+      "type": "array",
+      "title": "Reclassification Types"
+     },
+     "four_eyes": {
+      "$ref": "#/components/schemas/FourEyes"
+     },
+     "median_hours_to_final": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Median Hours To Final",
+      "description": "case creation to the applied override that finalised it"
+     }
+    },
+    "type": "object",
+    "required": [
+     "since",
+     "cases_decided",
+     "escalation_rate",
+     "human_reviewed",
+     "awaiting_review",
+     "human_resolved",
+     "overrides_applied",
+     "applied_override_rate",
+     "agreement_rate",
+     "agreement_rate_approve_reject",
+     "reason_codes",
+     "rules",
+     "transitions",
+     "confidence",
+     "reclassifications",
+     "reclassification_types",
+     "four_eyes",
+     "median_hours_to_final"
+    ],
+    "title": "QualityWindow"
+   },
+   "ReasonCount": {
+    "properties": {
+     "reason_code": {
+      "type": "string",
+      "title": "Reason Code"
+     },
+     "label": {
+      "type": "string",
+      "title": "Label"
+     },
+     "requested": {
+      "type": "integer",
+      "title": "Requested",
+      "description": "override requests with this reason, whatever their outcome"
+     },
+     "applied": {
+      "type": "integer",
+      "title": "Applied"
+     }
+    },
+    "type": "object",
+    "required": [
+     "reason_code",
+     "label",
+     "requested",
+     "applied"
+    ],
+    "title": "ReasonCount"
+   },
+   "Reclassification": {
+    "properties": {
+     "from_type": {
+      "type": "string",
+      "title": "From Type"
+     },
+     "to_type": {
+      "type": "string",
+      "title": "To Type"
+     },
+     "count": {
+      "type": "integer",
+      "title": "Count"
+     }
+    },
+    "type": "object",
+    "required": [
+     "from_type",
+     "to_type",
+     "count"
+    ],
+    "title": "Reclassification"
+   },
    "ReclassifyRequest": {
     "properties": {
      "doc_type": {
@@ -3654,6 +4051,56 @@
     ],
     "title": "RiskLevel"
    },
+   "RuleOverrides": {
+    "properties": {
+     "rule_id": {
+      "type": "string",
+      "title": "Rule Id"
+     },
+     "decision": {
+      "type": "string",
+      "title": "Decision",
+      "description": "the AI decision this rule produces"
+     },
+     "cases": {
+      "type": "integer",
+      "title": "Cases",
+      "description": "decided cases this rule drove"
+     },
+     "overridden": {
+      "type": "integer",
+      "title": "Overridden",
+      "description": "of those, cases with an applied override"
+     },
+     "changed": {
+      "type": "integer",
+      "title": "Changed",
+      "description": "of those, cases whose final human decision differs from the AI's"
+     },
+     "change_rate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Change Rate",
+      "description": "changed / cases"
+     }
+    },
+    "type": "object",
+    "required": [
+     "rule_id",
+     "decision",
+     "cases",
+     "overridden",
+     "changed",
+     "change_rate"
+    ],
+    "title": "RuleOverrides"
+   },
    "TokenResponse": {
     "properties": {
      "access_token": {
@@ -3686,6 +4133,29 @@
      "display_name"
     ],
     "title": "TokenResponse"
+   },
+   "Transition": {
+    "properties": {
+     "ai_decision": {
+      "type": "string",
+      "title": "Ai Decision"
+     },
+     "final_decision": {
+      "type": "string",
+      "title": "Final Decision"
+     },
+     "cases": {
+      "type": "integer",
+      "title": "Cases"
+     }
+    },
+    "type": "object",
+    "required": [
+     "ai_decision",
+     "final_decision",
+     "cases"
+    ],
+    "title": "Transition"
    },
    "UploadFileSpec": {
     "properties": {

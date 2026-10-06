@@ -73,6 +73,7 @@ class Settings:
     sqs_queue_url: str = ""
     pipeline_runtime_arn: str = ""                      # AgentCore runtime that processes cases (MEDISHIELD_QUEUE=agentcore)
     assistant_runtime_arn: str = ""                     # AgentCore runtime that answers chat
+    policy_ingest_function: str = ""                    # Lambda that parses uploaded policy PDFs with Docling (AWS, with S3 storage)
     api_base_path: str = ""                             # "/api" when CloudFront forwards /api/* to the Lambda
     redis_url: str = ""
 
@@ -154,6 +155,7 @@ def get_settings() -> Settings:
         sqs_queue_url=_env("SQS_QUEUE_URL", ""),
         pipeline_runtime_arn=_env("PIPELINE_RUNTIME_ARN", ""),
         assistant_runtime_arn=_env("ASSISTANT_RUNTIME_ARN", ""),
+        policy_ingest_function=_env("POLICY_INGEST_FUNCTION", ""),
         api_base_path=_env("API_BASE_PATH", ""),
         redis_url=_env("REDIS_URL", ""),
     )

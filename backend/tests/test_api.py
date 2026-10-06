@@ -402,6 +402,7 @@ def test_policy_upload_validation(client, auth, fake_pipeline, monkeypatch):
     from medishield.api.routes import policies as pol
     queued = []
     monkeypatch.setattr(pol, "enqueue_policy", queued.append)
+    monkeypatch.setattr(pol, "docling_installed", lambda: True)      # CI installs without the ingest group
     bad = client.post("/policies", data={"plan": "gold"}, files={"file": ("p.pdf", io.BytesIO(b"not a pdf"), "application/pdf")}, headers=auth("admin"))
     assert bad.status_code == 415
     bad_plan = client.post("/policies", data={"plan": "Gold Plan!"}, files={"file": ("p.pdf", io.BytesIO(b"%PDF-1.4"), "application/pdf")}, headers=auth("admin"))

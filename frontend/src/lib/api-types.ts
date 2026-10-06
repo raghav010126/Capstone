@@ -560,6 +560,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ops/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Quality
+         * @description AI quality monitor: how human reviewers agree with the AI (overrides, reason codes, the rules they overturn,
+         *     reclassifications, four-eyes outcomes), for all time and for cases created in the last 30 days. Recorded data only;
+         *     no model calls.
+         */
+        get: operations["quality_ops_quality_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chat/scope": {
         parameters: {
             query?: never;
@@ -634,6 +656,28 @@ export interface paths {
          * @description Delete everything the assistant remembers about the caller (conversations, facts, preferences).
          */
         delete: operations["chat_forget_chat_memory_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/intake/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email Intake
+         * @description Create a case from the PDF/PNG/JPEG/TIFF attachments of one email, owned by the caller. The From address must be
+         *     on the intake allow-list (``INTAKE_SENDERS``), and a submitter may only send mail from an address mapped to them.
+         *     Idempotent on the Message-ID: the same message again returns the first case (200).
+         */
+        post: operations["email_intake_intake_email_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -867,6 +911,11 @@ export interface components {
             question: string;
             /** Conversation Id */
             conversation_id?: string | null;
+            /**
+             * Case Id
+             * @description asked from this case's page: the question is about it (access is still checked)
+             */
+            case_id?: string | null;
         };
         /** ChatResponse */
         ChatResponse: {
@@ -1015,6 +1064,23 @@ export interface components {
             /** Citation */
             citation?: string | null;
         };
+        /** ConfidenceSplit */
+        ConfidenceSplit: {
+            /**
+             * Confirmed
+             * @description mean AI confidence where the human kept the AI decision
+             */
+            confirmed: number | null;
+            /**
+             * Overridden
+             * @description mean AI confidence where the human changed it
+             */
+            overridden: number | null;
+            /** N Confirmed */
+            n_confirmed: number;
+            /** N Overridden */
+            n_overridden: number;
+        };
         /**
          * CoverageStatus
          * @enum {string}
@@ -1140,6 +1206,17 @@ export interface components {
              * @default false
              */
             corroborated: boolean;
+        };
+        /** FourEyes */
+        FourEyes: {
+            /** Requested */
+            requested: number;
+            /** Approved */
+            approved: number;
+            /** Rejected */
+            rejected: number;
+            /** Pending */
+            pending: number;
         };
         /** FraudAnomaly */
         FraudAnomaly: {
@@ -1347,6 +1424,87 @@ export interface components {
              */
             quality_score: number;
         };
+        /** QualityOut */
+        QualityOut: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Window Days */
+            window_days: number;
+            all_time: components["schemas"]["QualityWindow"];
+            recent: components["schemas"]["QualityWindow"];
+        };
+        /** QualityWindow */
+        QualityWindow: {
+            /**
+             * Since
+             * @description cohort start (cases created on or after); null for all time
+             */
+            since: string | null;
+            /** Cases Decided */
+            cases_decided: number;
+            /** Escalation Rate */
+            escalation_rate: number | null;
+            /** Human Reviewed */
+            human_reviewed: number;
+            /** Awaiting Review */
+            awaiting_review: number;
+            /** Human Resolved */
+            human_resolved: number;
+            /** Overrides Applied */
+            overrides_applied: number;
+            /**
+             * Applied Override Rate
+             * @description decided cases with an applied override / cases decided
+             */
+            applied_override_rate: number | null;
+            /** Agreement Rate */
+            agreement_rate: number | null;
+            /** Agreement Rate Approve Reject */
+            agreement_rate_approve_reject: number | null;
+            /** Reason Codes */
+            reason_codes: components["schemas"]["ReasonCount"][];
+            /** Rules */
+            rules: components["schemas"]["RuleOverrides"][];
+            /** Transitions */
+            transitions: components["schemas"]["Transition"][];
+            confidence: components["schemas"]["ConfidenceSplit"];
+            /** Reclassifications */
+            reclassifications: number;
+            /** Reclassification Types */
+            reclassification_types: components["schemas"]["Reclassification"][];
+            four_eyes: components["schemas"]["FourEyes"];
+            /**
+             * Median Hours To Final
+             * @description case creation to the applied override that finalised it
+             */
+            median_hours_to_final: number | null;
+        };
+        /** ReasonCount */
+        ReasonCount: {
+            /** Reason Code */
+            reason_code: string;
+            /** Label */
+            label: string;
+            /**
+             * Requested
+             * @description override requests with this reason, whatever their outcome
+             */
+            requested: number;
+            /** Applied */
+            applied: number;
+        };
+        /** Reclassification */
+        Reclassification: {
+            /** From Type */
+            from_type: string;
+            /** To Type */
+            to_type: string;
+            /** Count */
+            count: number;
+        };
         /** ReclassifyRequest */
         ReclassifyRequest: {
             /** Doc Type */
@@ -1383,6 +1541,36 @@ export interface components {
          * @enum {string}
          */
         RiskLevel: "LOW" | "MEDIUM" | "HIGH";
+        /** RuleOverrides */
+        RuleOverrides: {
+            /** Rule Id */
+            rule_id: string;
+            /**
+             * Decision
+             * @description the AI decision this rule produces
+             */
+            decision: string;
+            /**
+             * Cases
+             * @description decided cases this rule drove
+             */
+            cases: number;
+            /**
+             * Overridden
+             * @description of those, cases with an applied override
+             */
+            overridden: number;
+            /**
+             * Changed
+             * @description of those, cases whose final human decision differs from the AI's
+             */
+            changed: number;
+            /**
+             * Change Rate
+             * @description changed / cases
+             */
+            change_rate: number | null;
+        };
         /** TokenResponse */
         TokenResponse: {
             /** Access Token */
@@ -1398,6 +1586,15 @@ export interface components {
             role: string;
             /** Display Name */
             display_name: string;
+        };
+        /** Transition */
+        Transition: {
+            /** Ai Decision */
+            ai_decision: string;
+            /** Final Decision */
+            final_decision: string;
+            /** Cases */
+            cases: number;
         };
         /** UploadFileSpec */
         UploadFileSpec: {
@@ -2406,6 +2603,26 @@ export interface operations {
             };
         };
     };
+    quality_ops_quality_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityOut"];
+                };
+            };
+        };
+    };
     chat_scope_chat_scope_get: {
         parameters: {
             query?: never;
@@ -2506,6 +2723,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    email_intake_intake_email_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "message/rfc822": string;
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseCreated"];
                 };
             };
         };
