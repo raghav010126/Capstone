@@ -71,7 +71,20 @@ def test_events_are_ordered_and_resumable(repo):
     assert repo.events_after("CASE-1", 0) == []
 
 
-def test_concurrent_audit_appends_form_one_unbroken_chain(repo):
+def test_concurrent_audit_appends_form_one_unbroken_chain(repo, monkeypatch):
+    # DynamoDB evaluates a ConditionExpression and writes as one atomic step; moto checks and writes separately with no lock,
+    # so two threads can both "win" the same sequence number (flaky on slow CI runners). Restore DynamoDB's guarantee here:
+    # the threads still collide on sequence numbers, so the append's re-read-and-relink retry is what keeps the chain whole.
+    from moto.dynamodb.models import DynamoDBBackend
+
+    lock, put = threading.Lock(), DynamoDBBackend.put_item
+
+    def atomic_put(self, *args, **kwargs):
+        with lock:
+            return put(self, *args, **kwargs)
+
+    monkeypatch.setattr(DynamoDBBackend, "put_item", atomic_put)
+
     def work(n):
         for i in range(8):
             audit.append(repo, f"actor{n}", "act", "CASE-1", {"i": i})

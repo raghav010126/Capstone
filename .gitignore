@@ -39,3 +39,6 @@ build/
 
 # parallel agent worktrees
 .claude/worktrees/
+
+# Office lock files (a deck open in PowerPoint)
+~$*
