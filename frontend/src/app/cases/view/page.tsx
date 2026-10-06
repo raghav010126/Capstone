@@ -17,6 +17,7 @@ import { FieldTable } from "@/components/case/field-table"
 import { AgentPanels, DocDecisionRow, Telemetry } from "@/components/case/agent-panels"
 import { DecisionPanel } from "@/components/case/decision-panel"
 import { OverrideDialog, ReclassifyDialog } from "@/components/case/review-dialogs"
+import { CaseChat } from "@/components/chat/case-chat"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -83,6 +84,7 @@ function CasePage() {
       actions={
         <>
           <CaseStatusBadge display={detail.display_status} status={detail.status} />
+          {can("policy:ask") && <CaseChat key={detail.id} caseId={detail.id} />}
           {can("report:download") && (
             <Button
               variant="outline"

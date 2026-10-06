@@ -117,6 +117,9 @@ pattern as my earlier RBAC chatbot assignment: access is enforced **where the da
 - **Memory:** follow-ups ("and on Silver?") and per-user memory across sessions (AgentCore Memory); text is PHI-redacted before
   storage. "Clear my memory" deletes it.
 - **Warm-up:** opening the page starts the agent and loads its search models, so the first answer isn't slow.
+- **Ask about this case:** a side panel on the case page scopes the conversation to that case ("why?", "what would change
+  the decision?", "which clause applies?"). No extra model call: the router is told the case id, and the case tool still
+  decides visibility (someone else's case is "not visible").
 
 | | |
 |---|---|

@@ -108,7 +108,7 @@ def case_passages(user: Principal, repo: Repo, case_ids: list[str]) -> tuple[lis
                 lines.append(f"- KYC on {doc.doc_id}: {'passed' if kyc.get('kyc_passed') else 'failed'}; flags {kyc.get('flags')}; "
                              f"warnings {kyc.get('warnings')}")
         out.append(Passage("case", f"Case {case.id}", "\n".join(lines), url=f"/cases/view?id={case.id}", owner=case.submitted_by,
-                           permission="case:read"))
+                           permission="case:read", meta=case_terms(case)))
         if access.allowed(user.role, "review:queue"):
             for ov in repo.list_overrides(case.id):
                 out.append(Passage("review", f"Override #{ov.id} on {case.id}",
@@ -116,6 +116,22 @@ def case_passages(user: Principal, repo: Repo, case_ids: list[str]) -> tuple[lis
                                    f"four-eyes {'yes' if ov.requires_four_eyes else 'no'}; resolved by {ov.resolved_by or '-'}",
                                    url=f"/cases/view?id={case.id}", owner=case.submitted_by, permission="review:queue"))
     return out, hidden
+
+
+def case_terms(case) -> dict:
+    """The procedure codes and plan a case was checked against, for policy questions about "this case"."""
+    from medishield.agents.policy import plan_for
+
+    codes, plans = [], []
+    for doc in case.documents:
+        pol = (doc.specialists or {}).get("policy") or {}
+        values = (doc.extraction or {}).get("values") or {}
+        codes += [str(p["code"]).upper() for p in pol.get("per_code", []) if p.get("code")]
+        codes += [str(ln["cpt"]).strip().upper() for ln in values.get("service_lines") or [] if isinstance(ln, dict) and ln.get("cpt")]
+        plan = pol.get("plan") or plan_for(values.get("policy_number"))
+        if plan:
+            plans.append(plan.lower())
+    return {"cpt_codes": list(dict.fromkeys(codes))[:10], "plans": list(dict.fromkeys(plans))}
 
 
 def my_cases_passage(user: Principal, repo: Repo, limit: int = 15) -> list[Passage]:

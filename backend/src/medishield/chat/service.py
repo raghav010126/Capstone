@@ -13,6 +13,7 @@ from pydantic import Field
 
 from medishield.api.security import Principal, Role
 from medishield.chat import access, analytics, router
+from medishield.chat import scope as case_scope
 from medishield.chat import sources as src
 from medishield.chat.memory import get_memory
 from medishield.db import audit
@@ -95,7 +96,8 @@ def answer(payload: dict) -> dict:
     u = payload.get("user", {})
     with observability.root_span("assistant", {"question": str(payload.get("question", ""))[:2000]},
                                  tags=["assistant", f"role:{u.get('role', '?')}"],
-                                 metadata={"role": u.get("role"), "conversation": payload.get("conversation_id")}) as finish:
+                                 metadata={"role": u.get("role"), "conversation": payload.get("conversation_id"),
+                                           "case": payload.get("case_id")}) as finish:
         out = _answer(payload)
         finish({"answer": out["answer"], "route": out["route"], "blocked": out["blocked"]},
                route=out["route"], blocked=out["blocked"], sources=len(out["sources"]))
@@ -107,6 +109,7 @@ def _answer(payload: dict) -> dict:
     user = Principal(u["username"], Role(u["role"]), u.get("display_name", u["username"]))
     question = str(payload.get("question", "")).strip()[:2000]
     conversation = str(payload.get("conversation_id") or uuid.uuid4().hex)
+    case_id = case_scope.case_id_of(payload)          # asked from a case page: that case is the subject (access still checked)
     tag = f"chat:{user.username}"
     if not question:
         return _result("Ask me a question about policies, cases or operations.", "help", user, conversation=conversation)
@@ -124,7 +127,9 @@ def _answer(payload: dict) -> dict:
     pool = ThreadPoolExecutor(max_workers=1)
     recalled_f = pool.submit(memory.recall, user.username, question)
     pool.shutdown(wait=False)
-    r, how = router.classify(question, history, tag=tag)
+    r, how = router.classify(question, history + [case_scope.router_hint(case_id)] if case_id else history, tag=tag)
+    if case_id:
+        r = case_scope.apply(r, case_id, question)
     q = r.standalone_question or question
 
     if r.route == "off_topic":
@@ -145,15 +150,18 @@ def _answer(payload: dict) -> dict:
         note, sql = "", None
         if blocked:
             note = f"Part of the question concerns {', '.join(access.SOURCE_LABELS[s] for s in blocked)}, which your role can't access; this answer leaves it out."
+        scoped, hidden = src.case_passages(user, repo, [case_id]) if case_id else ([], [])    # the page's case, always
+        if hidden:
+            note += f" No case {case_id} is visible to you."
         if r.route == "policy" or ("policies" in r.sources and "policies" not in blocked):
-            passages += src.policy_passages(q, r.plans, r.cpt_codes)
+            passages += src.policy_passages(q, *case_scope.policy_terms(r, scoped))
         if r.route == "case":
-            if r.case_ids:
-                found, hidden = src.case_passages(user, repo, r.case_ids)
+            if ids := [c for c in r.case_ids if c != case_id]:          # the page's case is already in ``scoped``
+                found, hidden = src.case_passages(user, repo, ids)
                 passages += found
                 if hidden:
                     note += f" No case {', '.join(hidden)} is visible to you."
-            else:
+            elif not case_id:
                 passages += src.my_cases_passage(user, repo)
         if r.route == "audit" or ("audit" in r.sources and "audit" not in blocked):
             passages += src.audit_passages(user, repo, r.case_ids)
@@ -176,6 +184,7 @@ def _answer(payload: dict) -> dict:
                 scope = " (your own cases only)" if access.own_cases_only(user.role) else ""
                 passages.append(src.Passage("data", f"Query over {', '.join(res.tables)}{scope}", f"SQL: {res.sql}\nResult ({len(res.rows)} rows):\n{table}",
                                             permission="case:read", meta={"tables": res.tables}))
+        passages = scoped + passages
         src.guard(user, passages)
 
     if not passages:
@@ -188,7 +197,8 @@ def _answer(payload: dict) -> dict:
         recalled = []
     context = ("Earlier in this conversation:\n" + "\n".join(f"{t['role']}: {t['text'][:500]}" for t in history) + "\n\n" if history else "") + \
               (f"Things this user asked before: {' | '.join(recalled)}\n\n" if recalled else "")
-    msg = (f"{context}User role: {access.ROLE_LABELS[user.role]}\nQuestion: {q}\n\nPassages:\n{numbered}"
+    msg = (f"{context}" + (f"Asked from the page of case {case_id}.\n" if scoped else "")
+           + f"User role: {access.ROLE_LABELS[user.role]}\nQuestion: {q}\n\nPassages:\n{numbered}"
            + (f"\n\nAdd this note at the end: {note.strip()}" if note else ""))
     try:
         out = structured("chat_answer", ANSWER_SYSTEM, [msg], AnswerOut, tag=tag).parsed
