@@ -48,7 +48,9 @@ def policy_passages(question: str, plans: list[str], codes: list[str], k: int = 
     from medishield.rag.retrieve import get_store
 
     store = get_store()
-    plans = [p for p in plans if p in store.indexes] or sorted(store.indexes)
+    # a plan named in the question wins: the router model may shorten an uploaded plan's name (demo_silver -> silver)
+    named = [p for p in store.indexes if re.search(rf"(?<![\w-]){re.escape(p)}(?![\w-])", question.lower())]
+    plans = named or [p for p in plans if p in store.indexes] or sorted(store.indexes)
     out: list[Passage] = []
     for plan in plans:
         for code in codes:                                      # the parsed exclusion table is authoritative for coverage

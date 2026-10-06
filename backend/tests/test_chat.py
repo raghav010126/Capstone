@@ -212,3 +212,26 @@ def test_warm_and_forget_endpoints(client, auth, monkeypatch):
     m.remember("auditor", "c2", "Who approved?", "x [1]")
     assert client.delete("/chat/memory", headers=auth("reviewer")).json()["forgotten"] >= 1
     assert m.history("reviewer", "c1") == [] and m.history("auditor", "c2")              # only the caller's memory is deleted
+
+
+def test_a_plan_named_in_the_question_wins_over_the_routers_guess(monkeypatch):
+    from types import SimpleNamespace
+
+    from medishield.rag import retrieve
+
+    class FakeStore:
+        def __init__(self):
+            self.indexes = {p: SimpleNamespace(chunks=[]) for p in ("gold", "silver", "demo_silver")}
+
+        def ranges(self, plan):
+            return []
+
+        def search(self, q, plan, k=3):
+            return [SimpleNamespace(chunk=SimpleNamespace(section=f"{plan} section", subsection=None, text="t", pages=[1],
+                                                          section_no="1", kind="text"), score=1.0)]
+
+    monkeypatch.setattr(retrieve, "get_store", lambda: FakeStore())
+    out = src.policy_passages("Is CPT 17000 covered on the demo_silver plan?", plans=["silver"], codes=["17000"])
+    assert {p.meta["plan"] for p in out} == {"demo_silver"}
+    out = src.policy_passages("Is CPT 17000 covered on the silver plan?", plans=[], codes=["17000"])
+    assert {p.meta["plan"] for p in out} == {"silver"}          # "silver" does not match inside "demo_silver" or vice versa
