@@ -15,8 +15,10 @@ ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
 [ "$ACCOUNT" = "$ACCOUNT_EXPECTED" ] || { echo "signed in to $ACCOUNT, expected $ACCOUNT_EXPECTED - stopping"; exit 1; }
 echo "account $ACCOUNT, region $AWS_REGION, profile $AWS_PROFILE"
 
+# optional email intake: INBOUND_EMAIL_DOMAIN=claims.example.com enables it (docs/aws.md); set it empty to remove it again
 deploy() { aws cloudformation deploy --stack-name "$STACK" --template-file infra/template.yaml --capabilities CAPABILITY_IAM \
-             --no-fail-on-empty-changeset --parameter-overrides AlertEmail="$EMAIL" ImageTag="$1" DemoUsers=0 "${@:2}"; }
+             --no-fail-on-empty-changeset --parameter-overrides AlertEmail="$EMAIL" ImageTag="$1" DemoUsers=0 \
+             ${INBOUND_EMAIL_DOMAIN+"InboundEmailDomain=$INBOUND_EMAIL_DOMAIN"} "${@:2}"; }
 out() { aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
 
 # Stage 1 only on a first deploy. Re-running it on a live stack would set ImageTag=none and delete the application.
@@ -33,6 +35,7 @@ put() { [ -n "${2:-}" ] && aws ssm put-parameter --name "/medishield/$1" --type 
 put anthropic_api_key "${ANTHROPIC_API_KEY:-}"
 put langsmith_api_key "${LANGSMITH_API_KEY:-}"
 put langsmith_project "${LANGSMITH_PROJECT:-medishield-capstone}"
+[ -z "${INTAKE_SENDERS:-}" ] || put intake_senders "$INTAKE_SENDERS"   # email intake allow-list {"address": "username"}
 aws ssm get-parameter --name /medishield/jwt_secret >/dev/null 2>&1 || put jwt_secret "$(python3 -c 'import secrets;print(secrets.token_urlsafe(48))')"
 
 if ! aws ssm get-parameter --name /medishield/admin_password >/dev/null 2>&1; then     # admin-only site: password goes to a private file

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useQueryClient } from "@tanstack/react-query"
-import { CloudUpload, FileImage, FileText, Loader2, Trash2, ArrowRight } from "lucide-react"
+import { CloudUpload, FileImage, FileText, Loader2, Mail, Trash2, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import { api, ApiError, type CaseCreated, type CaseDetail, type UploadGrant, type UploadMode } from "@/lib/api"
 import { useCaseEvents } from "@/hooks/use-case-events"
@@ -26,6 +26,7 @@ function size(n: number) {
 export default function NewCasePage() {
   const qc = useQueryClient()
   const input = useRef<HTMLInputElement>(null)
+  const emlInput = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<File[]>([])
   const [drag, setDrag] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -92,6 +93,25 @@ export default function NewCasePage() {
       toast.error(e instanceof ApiError ? e.message : "Upload failed")
     } finally {
       setBusy(false)
+    }
+  }
+
+  // a saved email (.eml): its PDF and image attachments become the case (POST /intake/email; the sender must be allow-listed)
+  async function submitEmail(file: File) {
+    setBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await api<CaseCreated>("/intake/email", { method: "POST", body: fd })
+      res.warnings.forEach((w) => toast.warning(w))
+      if (res.idempotent_replay) toast.info("This email was submitted before: showing its case")
+      setCreated(res)
+      setFinished(false)
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Email submission failed")
+    } finally {
+      setBusy(false)
+      if (emlInput.current) emlInput.current.value = ""
     }
   }
 
@@ -165,6 +185,13 @@ export default function NewCasePage() {
                 <Button disabled={!files.length || busy} onClick={submit}>
                   {busy && <Loader2 className="animate-spin" />} Submit {files.length > 0 && `${files.length} document${files.length > 1 ? "s" : ""}`}
                 </Button>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t pt-4">
+                <p className="text-xs text-muted-foreground">Documents arrived by email? Submit the saved message (.eml): its PDF and image attachments become the case.</p>
+                <Button variant="outline" size="sm" disabled={busy} onClick={() => emlInput.current?.click()}>
+                  <Mail /> Submit an email
+                </Button>
+                <input ref={emlInput} type="file" accept=".eml,message/rfc822" className="hidden" onChange={(e) => e.target.files?.[0] && submitEmail(e.target.files[0])} />
               </div>
             </CardContent>
           </Card>
