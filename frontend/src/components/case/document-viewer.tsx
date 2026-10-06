@@ -5,6 +5,7 @@ import { Flame, Maximize2, Minus, Plus, ScanSearch } from "lucide-react"
 import { useAuthedImage } from "@/hooks/use-authed-image"
 import type { DocumentOut } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { fieldLabel } from "@/components/case/field-table"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -74,8 +75,8 @@ export function DocumentViewer({ caseId, doc, activeField, onSelectField }: { ca
                     key={f.name}
                     ref={active ? activeRef : undefined}
                     onClick={() => onSelectField(active ? null : f.name)}
-                    title={`${f.name}: ${typeof f.value === "object" ? JSON.stringify(f.value) : String(f.value)}`}
-                    aria-label={`Field ${f.name}`}
+                    title={`${fieldLabel(f.name)}: ${typeof f.value === "object" ? JSON.stringify(f.value) : String(f.value)}`}
+                    aria-label={`Field ${fieldLabel(f.name)}`}
                     className={cn(
                       "absolute rounded-[3px] border transition-all",
                       active ? "z-10 border-2 border-escalate bg-escalate/25 shadow-[0_0_0_3px_oklch(0.62_0.15_70/0.25)]" : "border-info/60 bg-info/10 hover:bg-info/25",

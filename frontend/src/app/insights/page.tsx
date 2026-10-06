@@ -202,7 +202,7 @@ export default function InsightsPage() {
                 tableHead={["Agent", "Cost"]}
               />
               <p className="mt-2 text-xs text-muted-foreground">
-                Retries on the larger model: {Object.keys(r.ops.retries_by_agent).length ? Object.entries(r.ops.retries_by_agent).map(([a, n]) => `${a} ${n}`).join(", ") : "none"}. Perception runs on Sonnet; policy and fraud reasoning run on Opus.
+                Retries on the larger model: {Object.keys(r.ops.retries_by_agent).length ? Object.entries(r.ops.retries_by_agent).map(([a, n]) => `${a} ${n}`).join(", ") : "none"}. Sonnet 5.5 runs perception, policy, fraud and summaries; Opus 5.5 only retries failed validations and gives the second opinion on suspected tampering (runs before 6 Oct used Opus for policy and fraud).
               </p>
             </ChartCard>
           </div>

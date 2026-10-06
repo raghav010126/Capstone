@@ -6,6 +6,18 @@ import { cn } from "@/lib/utils"
 
 const fmt = (v: unknown) => (v == null ? "–" : typeof v === "object" ? JSON.stringify(v) : String(v))
 
+const WORDS: Record<string, string> = { dob: "date of birth", npi: "NPI", icd: "ICD", cpt: "CPT", dea: "DEA", rx: "Rx", id: "ID", kyc: "KYC" }
+
+/** A schema path as a label: "patient_dob" -> "Patient date of birth", "drugs[0].name" -> "Drug 1 · name". */
+export function fieldLabel(name: string): string {
+  const label = name
+    .split(".")
+    .map((part) => part.replace(/^(\w+?)s?\[(\d+)\]$/, (_m, base: string, n: string) => `${base} ${Number(n) + 1}`))
+    .map((part) => part.split("_").filter(Boolean).map((w) => WORDS[w] ?? w).join(" "))
+    .join(" · ")
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
 export function FieldTable({ doc, active, onSelect }: { doc: DocumentOut; active: string | null; onSelect: (name: string | null) => void }) {
   if (!doc.fields.length) return <p className="py-6 text-center text-sm text-muted-foreground">No fields were extracted from this document.</p>
   return (
@@ -25,7 +37,7 @@ export function FieldTable({ doc, active, onSelect }: { doc: DocumentOut; active
               onClick={() => onSelect(active === f.name ? null : f.name)}
               className={cn("cursor-pointer border-t transition-colors hover:bg-muted/50", active === f.name && "bg-escalate-soft")}
             >
-              <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground">{f.name}</td>
+              <td className="px-3 py-1.5 text-muted-foreground" title={f.name}>{fieldLabel(f.name)}</td>
               <td className="px-3 py-1.5 font-medium">{fmt(f.value)}</td>
               <td className="px-3 py-1.5">
                 {f.grounded ? (

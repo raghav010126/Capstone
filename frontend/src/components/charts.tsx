@@ -255,7 +255,6 @@ export function ReliabilityChart({ raw, calibrated }: { raw: RelBin[]; calibrate
           </g>
         ))}
         <line x1={x(0)} y1={y(0)} x2={x(1)} y2={y(1)} stroke="oklch(0.65 0 0)" strokeWidth={1.5} />
-        <text x={x(0.98)} y={y(0.9)} textAnchor="end" fontSize="10" className="fill-muted-foreground">perfect calibration</text>
         {series(raw, "#2a78d6", "circle", "Raw")}
         {calibrated && series(calibrated, SERIES2, "diamond", "Calibrated")}
         <text x={(x(0) + x(1)) / 2} y={H - 6} textAnchor="middle" fontSize="11" className="fill-muted-foreground">confidence reported by the system</text>
