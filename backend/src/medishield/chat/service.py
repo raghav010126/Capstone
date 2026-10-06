@@ -89,6 +89,20 @@ def forget(payload: dict) -> dict:
 
 
 def answer(payload: dict) -> dict:
+    """One assistant question, traced in LangSmith as an "assistant" run (role, route, blocked; PHI scrubbed)."""
+    from medishield import observability
+
+    u = payload.get("user", {})
+    with observability.root_span("assistant", {"question": str(payload.get("question", ""))[:2000]},
+                                 tags=["assistant", f"role:{u.get('role', '?')}"],
+                                 metadata={"role": u.get("role"), "conversation": payload.get("conversation_id")}) as finish:
+        out = _answer(payload)
+        finish({"answer": out["answer"], "route": out["route"], "blocked": out["blocked"]},
+               route=out["route"], blocked=out["blocked"], sources=len(out["sources"]))
+    return out
+
+
+def _answer(payload: dict) -> dict:
     u = payload["user"]
     user = Principal(u["username"], Role(u["role"]), u.get("display_name", u["username"]))
     question = str(payload.get("question", "")).strip()[:2000]

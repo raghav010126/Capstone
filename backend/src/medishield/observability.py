@@ -95,10 +95,11 @@ def llm_span(step: str, model: str, effort: str, inputs: dict):
     if c is None:
         yield lambda outputs=None, **meta: None
         return
-    from langsmith import trace
+    from langsmith import trace, tracing_context
 
-    with trace(name=f"llm:{step}", run_type="llm", inputs=inputs, client=c, project_name=project(),
-               metadata={"ls_provider": "anthropic", "ls_model_name": model, "effort": effort, "step": step}) as rt:
+    with tracing_context(enabled=True, client=c, project_name=project()), \
+            trace(name=f"llm:{step}", run_type="llm", inputs=inputs, client=c, project_name=project(),
+                  metadata={"ls_provider": "anthropic", "ls_model_name": model, "effort": effort, "step": step}) as rt:
         def finish(outputs: dict | None = None, **meta: Any) -> None:
             if meta:
                 rt.add_metadata(meta)
@@ -106,6 +107,30 @@ def llm_span(step: str, model: str, effort: str, inputs: dict):
                 rt.end(outputs=outputs)
 
         yield finish
+
+
+@contextmanager
+def root_span(name: str, inputs: dict, tags: list[str] | None = None, metadata: dict | None = None):
+    """A top-level trace (e.g. one assistant question); model calls inside it nest under it. Flushed on exit, because the
+    process (an AgentCore microVM) may be paused right after it answers."""
+    c = _client()
+    if c is None:
+        yield lambda outputs=None, **meta: None
+        return
+    from langsmith import trace, tracing_context
+
+    # langsmith's trace() is a no-op unless tracing is switched on; enable it for this block only (not process-wide)
+    with tracing_context(enabled=True, client=c, project_name=project()), \
+            trace(name=name, run_type="chain", inputs=inputs, client=c, project_name=project(),
+                  tags=["medishield", *(tags or [])], metadata=metadata or {}) as rt:
+        def finish(outputs: dict | None = None, **meta: Any) -> None:
+            if meta:
+                rt.add_metadata(meta)
+            if outputs is not None:
+                rt.end(outputs=outputs)
+
+        yield finish
+    flush()
 
 
 def flush() -> None:
