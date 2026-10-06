@@ -120,6 +120,7 @@ pattern as my earlier RBAC chatbot assignment: access is enforced **where the da
 - **Ask about this case:** a side panel on the case page scopes the conversation to that case ("why?", "what would change
   the decision?", "which clause applies?"). No extra model call: the router is told the case id, and the case tool still
   decides visibility (someone else's case is "not visible").
+- **MCP server:** the same tools and role permissions for Claude Code and Claude Desktop at `/api/mcp` ([docs/mcp.md](docs/mcp.md)).
 
 | | |
 |---|---|

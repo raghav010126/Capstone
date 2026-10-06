@@ -16,6 +16,7 @@ from medishield.api.security import Role, hash_password, install_log_redaction
 from medishield.config import get_settings
 from medishield.db.repo import repo_scope
 from medishield.db.session import get_engine
+from medishield.mcp_server.http import endpoint as mcp_endpoint
 from medishield.worker.queue import start_worker
 
 log = logging.getLogger("medishield")
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     for r in (auth.router, cases.router, review.router, audit.router, policies.router, ops.router, chat.router):
         app.include_router(r)
     app.include_router(email_intake.router)
+    app.add_route("/mcp", mcp_endpoint, include_in_schema=False)   # MCP (Streamable HTTP, stateless JSON), docs/mcp.md
     return app
 
 
