@@ -1,8 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
-import { Background, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react"
-import "@xyflow/react/dist/style.css"
+import { Fragment, useMemo } from "react"
 import { CheckCircle2, CircleDashed, Hourglass, Loader2, MinusCircle, TriangleAlert, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { LiveEvent } from "@/hooks/use-case-events"
@@ -41,25 +39,29 @@ function Icon({ state }: { state: StageState }) {
   return <CircleDashed className={c} />
 }
 
-function StageNode({ data }: NodeProps<Node<StageData>>) {
+function Stage({ label, sub, state }: StageData) {
   return (
-    <div
-      className={cn("w-[148px] rounded-xl border px-3 py-2.5 transition-all duration-300", STYLE[data.state])}
-      role="group"
-      aria-label={`${data.label}: ${data.state}`}
+    <li
+      className={cn("min-w-[118px] flex-1 rounded-xl border px-2.5 py-2.5 transition-all duration-300", STYLE[state])}
+      aria-label={`${label}: ${state}`}
     >
-      <Handle type="target" position={Position.Left} className="!size-1.5 !border-0 !bg-border" />
-      <div className="flex items-center gap-1.5 text-sm font-semibold">
-        <Icon state={data.state} />
-        {data.label}
+      <div className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold">
+        <Icon state={state} />
+        {label}
       </div>
-      <div className="mt-0.5 text-[11px] leading-tight opacity-80">{data.sub}</div>
-      <Handle type="source" position={Position.Right} className="!size-1.5 !border-0 !bg-border" />
-    </div>
+      <div className="mt-0.5 text-xs leading-snug opacity-80">{sub}</div>
+    </li>
   )
 }
 
-const nodeTypes = { stage: StageNode }
+/* the line into a stage: grey until the flow reaches it, moving while that stage runs */
+function Connector({ state }: { state: StageState }) {
+  return (
+    <li aria-hidden className="flex w-3 shrink-0 items-center">
+      <div className={cn("h-0.5 w-full rounded-full", state === "pending" ? "bg-border" : "bg-info", state === "running" && "animate-pulse")} />
+    </li>
+  )
+}
 
 export function stageStates(events: LiveEvent[], totalDocs: number, finished: boolean): Record<string, { state: StageState; sub?: string }> {
   const by = (n: string) => events.filter((e) => e.node === n)
@@ -105,42 +107,19 @@ export function stageStates(events: LiveEvent[], totalDocs: number, finished: bo
   return out
 }
 
+// a plain row of cards, not a graph canvas: the pipeline is linear, and native-size text stays readable at any width
 export function PipelineGraph({ events, totalDocs, finished, className }: { events: LiveEvent[]; totalDocs: number; finished: boolean; className?: string }) {
   const states = useMemo(() => stageStates(events, totalDocs, finished), [events, totalDocs, finished])
-  const nodes: Node<StageData>[] = STAGES.map((s, i) => ({
-    id: s.id,
-    type: "stage",
-    position: { x: i * 188, y: 0 },
-    data: { label: s.label, sub: states[s.id].sub ?? s.sub, state: states[s.id].state },
-    draggable: false,
-    selectable: false,
-  }))
-  const edges: Edge[] = STAGES.slice(1).map((s, i) => ({
-    id: `${STAGES[i].id}-${s.id}`,
-    source: STAGES[i].id,
-    target: s.id,
-    animated: states[s.id].state === "running",
-    style: { stroke: states[s.id].state === "pending" ? "var(--color-border)" : "var(--color-info)", strokeWidth: 2 },
-  }))
   return (
-    <div className={cn("h-[110px] w-full overflow-hidden rounded-xl border bg-muted/20", className)} aria-label="Pipeline progress">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.06 }}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
-        panOnDrag={false}
-        zoomOnScroll={false}
-        zoomOnPinch={false}
-        zoomOnDoubleClick={false}
-        preventScrolling={false}
-      >
-        <Background gap={18} size={1} color="var(--color-border)" />
-      </ReactFlow>
+    <div className={cn("w-full overflow-x-auto rounded-xl border bg-muted/20 p-3", className)} aria-label="Pipeline progress">
+      <ol className="flex items-stretch">
+        {STAGES.map((s, i) => (
+          <Fragment key={s.id}>
+            {i > 0 && <Connector state={states[s.id].state} />}
+            <Stage label={s.label} sub={states[s.id].sub ?? s.sub} state={states[s.id].state} />
+          </Fragment>
+        ))}
+      </ol>
     </div>
   )
 }

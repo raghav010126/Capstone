@@ -25,22 +25,55 @@ const KIND_ICON: Record<string, typeof BookOpen> = { policy: BookOpen, exclusion
 /** Anchor id of source n of a turn; ``scope`` keeps two chats on one page apart. */
 const sourceId = (scope: string, turn: number, n: number | string) => `src-${scope}${turn}-${n}`
 
-/** Answer text with [n] citations rendered as links to the numbered sources below it. */
-export function Cited({ text, turn, scope = "" }: { text: string; turn: number; scope?: string }) {
-  const parts = text.split(/(\[\d+\])/g)
+/** One line of an answer: **bold** and [n] citations, the latter linked to the numbered sources below it. */
+function Inline({ text, turn, scope }: { text: string; turn: number; scope: string }) {
   return (
-    <p className="whitespace-pre-wrap leading-relaxed">
-      {parts.map((p, i) => {
-        const m = p.match(/^\[(\d+)\]$/)
-        return m ? (
-          <a key={i} href={`#${sourceId(scope, turn, m[1])}`} className="mx-0.5 align-super text-[11px] font-semibold text-primary hover:underline">
-            [{m[1]}]
-          </a>
-        ) : (
-          <Fragment key={i}>{p}</Fragment>
-        )
+    <>
+      {text.split(/(\[\d+\]|\*\*[^*]+\*\*)/g).map((p, i) => {
+        const cite = p.match(/^\[(\d+)\]$/)
+        if (cite)
+          return (
+            <a key={i} href={`#${sourceId(scope, turn, cite[1])}`} className="mx-0.5 align-super text-[11px] font-semibold text-primary hover:underline">
+              [{cite[1]}]
+            </a>
+          )
+        if (p.startsWith("**") && p.endsWith("**")) return <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
+        return <Fragment key={i}>{p}</Fragment>
       })}
-    </p>
+    </>
+  )
+}
+
+const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+/
+
+/** Answer text: paragraphs and bullet lists (the small markdown subset the assistant is asked to write), with citations. */
+export function Cited({ text, turn, scope = "" }: { text: string; turn: number; scope?: string }) {
+  const blocks: { list: boolean; lines: string[] }[] = []
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue
+    const list = BULLET.test(line)
+    const last = blocks.at(-1)
+    if (last && last.list === list && list) last.lines.push(line.replace(BULLET, ""))
+    else blocks.push({ list, lines: [list ? line.replace(BULLET, "") : line] })
+  }
+  return (
+    <div className="space-y-2 leading-relaxed">
+      {blocks.map((b, i) =>
+        b.list ? (
+          <ul key={i} className="list-disc space-y-1 pl-5 marker:text-muted-foreground">
+            {b.lines.map((l, j) => (
+              <li key={j}>
+                <Inline text={l} turn={turn} scope={scope} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p key={i}>
+            <Inline text={b.lines[0]} turn={turn} scope={scope} />
+          </p>
+        ),
+      )}
+    </div>
   )
 }
 

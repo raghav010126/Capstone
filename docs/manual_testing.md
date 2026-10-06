@@ -27,13 +27,14 @@ fills in the username; then type the password.
    - The **claim form** tab shows evidence boxes on the page; click a field in the table to highlight it.
    - The decision panel says CPT **17000** is in the excluded range 17000–17999 (cosmetic, S4(a)), citing the Gold policy page.
    - Expand the **Classifier**, **KYC**, **Policy** and **Fraud** panels: each shows its own output and which model ran.
-4. Click **Case report** to download a PDF with every agent's output and the audit trail.
 
 ## 3. Human review, four-eyes approval and the audit chain (4 min)
 1. As **submitter**, upload cluster `C_003`: the five files ending in `PT_62350`. It escalates (the case page shows which rule
    and signals sent it to review), and it claims $18,900, which is over the four-eyes limit. It appears in the reviewer's
    **Review queue**, sorted by urgency. (`C_006`, files ending in `PT_39451`, $21,735, escalates too.)
-2. As **reviewer**: open it → **Override decision** → pick a decision and a reason code.
+2. As **reviewer**: open it. **Case report** downloads a PDF with every agent's output and the audit trail (reviewers,
+   seniors, auditors and admins only; submitters don't get the button). Then **Override decision** → pick a decision and a
+   reason code.
    - If the claimed amount is over **$10,000**, the override is only *requested*. The page says it needs a senior reviewer,
      and the reviewer has no Approve button.
 3. As **senior**: open the same case → **Approve** the override. The case becomes **Finalized** and the panel says the
