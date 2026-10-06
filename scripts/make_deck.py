@@ -248,24 +248,57 @@ notes(s, "The cost of intake today is people's time: four days and about eightee
          "real cases go straight through, and that is exactly what the pilot measures.")
 
 # ── 4. scope ────────────────────────────────────────────────────────────────────────────────────────
-s = new("Everything in the brief, plus what operations will need next", "Scope delivered")
-cols = [("The brief · 7 of 7", ["Multi-agent pipeline: 7 agents in LangGraph", "Ingestion API (FastAPI): upload, cases, trigger",
-                                "Policy RAG: Docling parsing + hybrid retrieval", "Case-management UI and review queue",
-                                "Labelled dataset and evaluation harness", "Architecture diagram", "README with an end-to-end walkthrough"]),
-        ("Bonus challenges · 6 of 6", ["Confidence calibration (ECE 0.018)", "Live progress (WebSockets; polling on AWS)",
-                                       "Tamper detection: ELA + typography", "Spanish and Hindi documents", "PDF case report",
-                                       "LangSmith tracing per agent call"]),
-        ("Beyond the brief", ["Role-aware assistant with citations (AgentCore + Memory)", "MCP server: Claude tools under the caller's role",
-                              "Email intake from allow-listed senders", "Policy upload with no code change",
-                              "AI quality monitor: where reviewers disagree", "CI: 261 tests + 21 quality gates"])]
-for i, (t, items) in enumerate(cols):
+s = new("What you're getting, and why each piece matters to you", "Scope delivered")
+
+
+def points(slide, x, y, w, h, items, size=12):
+    """Bullets with a bold lead-in and a plain-English reason after it."""
+    tb = slide.shapes.add_textbox(x, y, w, h)
+    tf = tb.text_frame
+    tf.word_wrap = True
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    for i, (lead, why) in enumerate(items):
+        para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        para.space_after = Pt(7)
+        for txt, bold, color in ((lead, True, INK), (f" {why}", False, MUTED)):
+            r = para.add_run()
+            r.text = txt
+            r.font.size, r.font.bold, r.font.color.rgb, r.font.name = Pt(size), bold, color, FONT
+
+
+cols = [("What the brief asked for", "all done",
+         "The core: it takes over the sorting and checking that 120 people do by hand today.",
+         [("Seven agents on every document.", "They read it, check identity, coverage and fraud, and propose a decision."),
+          ("An intake API.", "Portals, scanners or email can all feed the same pipeline."),
+          ("Coverage checked against the real policy.", "Every answer points to the clause and page."),
+          ("Screens for each team.", "Submitters, reviewers and auditors see only their part."),
+          ("Accuracy measured on labelled data.", "You don't have to take my word for it.")]),
+        ("The bonus challenges", "all done",
+         "Each one removes an objection you would hear from risk, audit or operations.",
+         [("Confidence that means something.", "We can choose how much goes straight through and know the error rate."),
+          ("Tamper checks on ID cards.", "Directly relevant to the open KYC audit findings."),
+          ("Spanish and Hindi.", "Members who don't write in English aren't sent to the slow lane."),
+          ("One-click case report.", "Auditors get the full record of a decision as a PDF."),
+          ("Every AI call traced.", "When a decision is questioned, we can replay what happened and what it cost.")]),
+        ("Added beyond the brief", "because operations will ask on day one",
+         "Things that usually turn into follow-up projects; they're already here.",
+         [("An assistant with sources.", "Staff ask in plain English and only ever see what their role allows."),
+          ("Email intake.", "Clinics already email claims; we take them as they arrive."),
+          ("Policy updates without engineers.", "A new plan PDF is live in minutes, not a release."),
+          ("A quality monitor.", "Shows where reviewers overrule the AI, so we fix the right rule."),
+          ("Quality gates on every change.", "A change that lowers accuracy cannot ship.")])]
+for i, (t, tag, why, items) in enumerate(cols):
     x = Inches(0.7 + i * 4.05)
-    box(s, x, Inches(1.8), Inches(3.8), Inches(4.95), WHITE if i < 2 else MINT, LINE if i < 2 else None)
-    text(s, x + Inches(0.3), Inches(2.0), Inches(3.3), Inches(0.45), t, 17, TEAL if i < 2 else DEEP, True)
-    text(s, x + Inches(0.3), Inches(2.6), Inches(3.3), Inches(4.0), "\n".join(f"✓  {it}" for it in items), 13, INK)
-notes(s, "Every deliverable and every bonus in the brief is done. The third column is what I added because operations will ask for "
-         "it on day one: a way to ask the system questions within your role, email intake, policy updates without engineers, and a "
-         "monitor that shows where reviewers disagree with the AI.")
+    box(s, x, Inches(1.75), Inches(3.8), Inches(5.05), WHITE if i < 2 else MINT, LINE if i < 2 else None)
+    text(s, x + Inches(0.3), Inches(1.92), Inches(3.3), Inches(0.4), t, 17, TEAL if i < 2 else DEEP, True)
+    text(s, x + Inches(0.3), Inches(2.3), Inches(3.3), Inches(0.3), tag.upper(), 10, MUTED, True)
+    text(s, x + Inches(0.3), Inches(2.65), Inches(3.3), Inches(0.6), why, 12, DEEP, True)
+    points(s, x + Inches(0.3), Inches(3.35), Inches(3.3), Inches(3.35), items)
+notes(s, "Rather than read you a checklist, here's why each part matters to us. The left column is the job itself: it does the sorting "
+         "and checking our reviewers do by hand. The middle column looks like extras, but each one answers a question you'll get from "
+         "risk or audit: can we trust the confidence score, what about forged IDs, what about members who don't write in English, "
+         "can an auditor see the whole decision. The right column is what operations would have raised as follow-up projects; "
+         "they're done.")
 
 # ── 5. how it decides ───────────────────────────────────────────────────────────────────────────────
 s = new("Models read, a rule file decides, people handle the uncertain", "How it works")
