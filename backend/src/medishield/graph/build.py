@@ -218,8 +218,8 @@ def build_graph(checkpointer=None):
     g.add_conditional_edges("received", fan_out_perception, ["perceive"])
     g.add_edge("perceive", "classified")
     g.add_conditional_edges("classified", fan_out_specialists, ["specialists"])
-    g.add_edge("specialists", "fraud_check")
-    g.add_edge("fraud_check", "decided")
+    g.add_edge("classified", "fraud_check")                 # fraud reads only the perception, so it runs beside the specialists
+    g.add_edge(["specialists", "fraud_check"], "decided")   # the decision waits for both
     g.add_conditional_edges("decided", needs_review, ["human_review", END])
     g.add_edge("human_review", END)
     return g.compile(checkpointer=checkpointer or InMemorySaver())

@@ -48,21 +48,26 @@ export function useCaseEvents(caseId: string | null, onDone?: (status: string) =
     const startPolling = () => {
       if (closed || finished || poll) return
       update(() => ({ state: "polling" }))
+      let after = 0
       const tick = async () => {
+        if (document.hidden && after > 0) return               // don't poll a tab nobody is looking at
         try {
-          const evs = await api<EventOut[]>(`/cases/${caseId}/events`)
-          evs.forEach(push)
-          const c = await api<{ status: string }>(`/cases/${caseId}`)
-          if (TERMINAL.has(c.status)) {
+          // one call returns the new events and the case status
+          const p = await api<{ events: EventOut[]; status: string }>(`/cases/${caseId}/progress?after=${after}`)
+          p.events.forEach((e) => {
+            push(e)
+            after = Math.max(after, e.id)
+          })
+          if (TERMINAL.has(p.status)) {
             clearInterval(poll)
-            finish(c.status)
+            finish(p.status)
           }
         } catch {
           /* transient: the next tick retries */
         }
       }
       void tick()
-      poll = setInterval(tick, 1500)
+      poll = setInterval(tick, 2000)
     }
 
     let ws: WebSocket | null = null

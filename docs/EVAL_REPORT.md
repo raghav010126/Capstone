@@ -1,6 +1,6 @@
 # MediShield evaluation report
 
-_Assembled 2026-10-05 16:07 from `docs/eval_results/` by `make report`. Every number comes from running the real pipeline (Claude Sonnet 5.5 / Opus 5.5, RapidOCR, Docling, Qdrant) on labelled documents._
+_Assembled 2026-10-06 08:24 from `docs/eval_results/` by `make report`. Every number comes from running the real pipeline (Claude Sonnet 5.5 / Opus 5.5, RapidOCR, Docling, Qdrant) on labelled documents._
 
 **How to read this.** Prompts and thresholds were tuned on the *dev* split only. The *held-out* split, the *seed-7* set (generated with a different random seed and never inspected during development) and the multilingual held-out members are reported without tuning. Decision accuracy is shown on **all** labels and on the labels that are actually **visible in the pixels**: the instructors' generator records a few labels (tampered IDs, a name mismatch, a structuring fraud, a blur) that it never draws, so no system can see them (see `docs/dataset_findings.md`).
 
@@ -8,8 +8,8 @@ _Assembled 2026-10-05 16:07 from `docs/eval_results/` by `make report`. Every nu
 
 | Run | Docs | Classification | Extraction (claim fields) | Retrieval Recall@3 | Decisions (all labels) | Decisions (visible labels) | Cost / case |
 |---|---|---|---|---|---|---|---|
-| Official dataset · dev | 77 | 100.0% | 100.0% | 100.0% | 96.1% | 100.0% | $0.12 |
-| Official dataset · heldout | 78 | 100.0% | 100.0% | 100.0% | 96.2% | 100.0% | $0.13 |
+| Official dataset · dev | 77 | 100.0% | 100.0% | 100.0% | 96.1% | 100.0% | $0.08 |
+| Official dataset · heldout | 78 | 100.0% | 100.0% | 100.0% | 96.2% | 100.0% | $0.08 |
 | Corrected dataset · all | 155 | 100.0% | 100.0% | 100.0% | 98.1% | 98.7% | $0.13 |
 | Unseen generalisation set · all | 155 | 100.0% | 100.0% | 100.0% | 96.1% | 100.0% | $0.12 |
 | Unseen set with the tampering · all | 155 | 100.0% | 100.0% | 100.0% | 98.1% | 99.4% | $0.12 |
@@ -28,7 +28,7 @@ Measured on the dev split with the same documents and the same prompts. *Always 
 | Configuration | Decisions (all) | Decisions (visible) | Claim-field extraction | Cost / case (uncached) | Classifier $ | KYC visual $ | Extractor $ |
 |---|---|---|---|---|---|---|---|
 | Always vision | 96.1% | 100.0% | 100.0% | $0.157 | $0.52 | $0.15 | $0.86 |
-| OCR-first (shipped) | 96.1% | 100.0% | 100.0% | $0.118 | $0.02 | $0.00 | $0.86 |
+| OCR-first (shipped) | 96.1% | 100.0% | 100.0% | $0.079 | $0.01 | $0.00 | $0.86 |
 | OCR-first + text-only extraction | 92.2% | 96.0% | 97.7% | $0.113 | $0.02 | $0.00 | $0.76 |
 
 ## Spanish and Hindi
@@ -46,8 +46,8 @@ ECE = expected calibration error (lower is better); Brier = mean squared error o
 
 | Run | Docs | Accuracy | ECE raw | ECE calibrated | Brier raw | Brier calibrated |
 |---|---|---|---|---|---|---|
-| official-dev (in-sample) | 77 | 96.1% | 0.107 | 0.019 | 0.057 | 0.038 |
-| official-heldout | 78 | 96.2% | 0.135 | 0.015 | 0.064 | 0.038 |
+| official-dev (in-sample) | 77 | 96.1% | 0.077 | 0.021 | 0.052 | 0.038 |
+| official-heldout | 78 | 96.2% | 0.098 | 0.018 | 0.059 | 0.038 |
 | corrected-all | 155 | 98.1% | 0.102 | 0.003 | 0.043 | 0.019 |
 | seed7-all | 155 | 96.1% | 0.088 | 0.015 | 0.056 | 0.037 |
 | seed7_corrected-all | 155 | 98.1% | 0.096 | 0.004 | 0.039 | 0.018 |
@@ -58,7 +58,7 @@ ECE = expected calibration error (lower is better); Brier = mean squared error o
 
 ## Official dataset, dev split (prompts were tuned here)
 
-_Generated 2026-10-05T15:44:05 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
+_Generated 2026-10-06T08:20:07 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
 
 #### Rubric metrics
 
@@ -66,7 +66,7 @@ _Generated 2026-10-05T15:44:05 by `make eval`. Prompts are tuned on the dev spli
 |---|---|---|
 | Classification (20%) | document-type accuracy | **100.0%** (77 docs) |
 | Extraction (20%) | required claim fields correct (ICD, CPT, line amounts, total, NPI, provider) | **100.0%** (87 fields) |
-| Policy retrieval (15%) | Recall@3 of the governing policy section per billed code / MRR | **100.0%** / 0.9884 (43 queries) |
+| Policy retrieval (15%) | Recall@3 of the governing policy section per billed code / MRR | **100.0%** / 1.0 (43 queries) |
 | Decision correctness (25%) | per-document decision accuracy, all labels | **96.1%** (77 docs) |
 | | ... on labels visible in the pixels | **100.0%** (74 docs) |
 | | case roll-up accuracy | 82.3% (17 cases) |
@@ -149,10 +149,10 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 #### Operations
 
 - Cases: 17, documents: 77
-- Case latency (cold path incl. LLM): p50 3.3s, p95 5.7s
-- Cost without cache: $2.00 total, $0.118/case, $0.026/document. Spent this run: $0.00
-- Cost by agent: classifier $0.02, extractor $0.86, policy $0.60, fraud $0.40, justify $0.12
-- LLM calls: 130 (126 served from cache); retries on Opus: {'extractor': 3, 'classifier': 1}
+- Case latency (cold path incl. LLM): p50 9.3s, p95 16.2s
+- Cost without cache: $1.34 total, $0.079/case, $0.017/document. Spent this run: $0.32
+- Cost by agent: classifier $0.01, extractor $0.86, fraud $0.13, policy $0.23, justify $0.12
+- LLM calls: 129 (99 served from cache); retries on Opus: {'extractor': 3}
 - Mean OCR grounding rate 97.9%; mean support rate (grounded or corroborated by the member database) 98.5%
 
 
@@ -160,7 +160,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 
 ## Official dataset, held-out split (never tuned on)
 
-_Generated 2026-10-05T15:46:38 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
+_Generated 2026-10-06T08:24:02 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
 
 #### Rubric metrics
 
@@ -168,7 +168,7 @@ _Generated 2026-10-05T15:46:38 by `make eval`. Prompts are tuned on the dev spli
 |---|---|---|
 | Classification (20%) | document-type accuracy | **100.0%** (78 docs) |
 | Extraction (20%) | required claim fields correct (ICD, CPT, line amounts, total, NPI, provider) | **100.0%** (94 fields) |
-| Policy retrieval (15%) | Recall@3 of the governing policy section per billed code / MRR | **100.0%** / 0.9773 (44 queries) |
+| Policy retrieval (15%) | Recall@3 of the governing policy section per billed code / MRR | **100.0%** / 1.0 (44 queries) |
 | Decision correctness (25%) | per-document decision accuracy, all labels | **96.2%** (78 docs) |
 | | ... on labels visible in the pixels | **100.0%** (75 docs) |
 | | case roll-up accuracy | 88.2% (17 cases) |
@@ -255,10 +255,10 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 #### Operations
 
 - Cases: 17, documents: 78
-- Case latency (cold path incl. LLM): p50 8.3s, p95 13.5s
-- Cost without cache: $2.15 total, $0.127/case, $0.028/document. Spent this run: $0.13
-- Cost by agent: classifier $0.03, extractor $0.92, policy $0.66, fraud $0.42, justify $0.13
-- LLM calls: 135 (113 served from cache); retries on Opus: {'extractor': 5, 'classifier': 1}
+- Case latency (cold path incl. LLM): p50 11.1s, p95 14.2s
+- Cost without cache: $1.39 total, $0.082/case, $0.018/document. Spent this run: $0.46
+- Cost by agent: classifier $0.02, extractor $0.89, fraud $0.13, policy $0.23, justify $0.12
+- LLM calls: 133 (81 served from cache); retries on Opus: {'extractor': 4}
 - Mean OCR grounding rate 98.4%; mean support rate (grounded or corroborated by the member database) 99.2%
 
 

@@ -121,7 +121,8 @@ def classify(path: str, lines: list[OcrLine], q: QualityMetrics, tag: str = "") 
         return evidence_confidence(out.doc_type, kw, margin, q)
 
     res = structured_with_retry("classifier", SYSTEM, parts, ClassifierOutput, tag=tag,
-                                accept=lambda o: conf_of(o) >= RETRY_BELOW,
+                                # with no keyword evidence the confidence cannot reach RETRY_BELOW, so a retry can't help
+                                accept=lambda o: kw is None or conf_of(o) >= RETRY_BELOW,
                                 prefer=lambda new, old: conf_of(new) >= conf_of(old))
     out = res.parsed
     tags = sorted(set(out.routing_tags) | ({"blurry"} if q.blur_suspected else set()) | ({"blank"} if q.blank else set()))

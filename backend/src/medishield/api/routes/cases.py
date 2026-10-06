@@ -222,8 +222,19 @@ def document_ela(case_id: str, doc_id: str, user: Principal = Depends(require("c
 def _events_after(case_id: str, last: int) -> tuple[list[S.EventOut], str | None]:
     with repo_scope() as db:
         rows = db.events_after(case_id, last)
-        case = db.get_case(case_id)
+        case = db.case_header(case_id)
         return [S.EventOut.model_validate(r, from_attributes=True) for r in rows], (case.status if case else None)
+
+
+@router.get("/cases/{case_id}/progress", response_model=S.CaseProgress)
+def case_progress(case_id: str, after: int = Query(0, ge=0), user: Principal = Depends(require("case:read")),
+                  db: Repo = Depends(get_db)):
+    """New events since ``after`` plus the case status, in one cheap call (for UIs that poll instead of streaming)."""
+    head = db.case_header(case_id)
+    if head is None or (user.role == Role.SUBMITTER and head.submitted_by != user.username):
+        raise HTTPException(404, "case not found")
+    return S.CaseProgress(events=[S.EventOut.model_validate(r, from_attributes=True) for r in db.events_after(case_id, after)],
+                          status=head.status)
 
 
 @router.get("/cases/{case_id}/events", response_model=list[S.EventOut])

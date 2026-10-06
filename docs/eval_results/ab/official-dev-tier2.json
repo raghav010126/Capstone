@@ -1,0 +1,366 @@
+{
+ "split": "dev",
+ "dataset": "official",
+ "timestamp": "2026-10-06T08:16:30",
+ "classification": {
+  "accuracy": 1.0,
+  "n": 77,
+  "wrong": []
+ },
+ "extraction": {
+  "rubric_claim_completeness": 1.0,
+  "rubric_n": 87,
+  "all_fields": 0.992,
+  "per_type": {
+   "ID_DOCUMENT": 0.9302,
+   "CLAIM_FORM": 0.9943,
+   "DISCHARGE_SUMMARY": 1.0,
+   "PRESCRIPTION": 1.0,
+   "POLICY_AMENDMENT": 1.0
+  },
+  "per_field": {
+   "CLAIM_FORM.attending_physician": [
+    1.0,
+    13
+   ],
+   "CLAIM_FORM.billing_provider": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.claim_number": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.cpt_codes": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.icd_codes": [
+    1.0,
+    14
+   ],
+   "CLAIM_FORM.line_charges": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.patient_dob": [
+    0.9333,
+    15
+   ],
+   "CLAIM_FORM.patient_name": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.policy_number": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.provider_npi": [
+    1.0,
+    13
+   ],
+   "CLAIM_FORM.service_date": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.total_charge": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.admit_date": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.attending_physician": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.discharge_date": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.facility": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.patient_dob": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.patient_name": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.primary_icd": [
+    1.0,
+    15
+   ],
+   "ID_DOCUMENT.dob": [
+    1.0,
+    10
+   ],
+   "ID_DOCUMENT.expiry_date": [
+    0.9167,
+    12
+   ],
+   "ID_DOCUMENT.name_on_id": [
+    1.0,
+    15
+   ],
+   "ID_DOCUMENT.policy_number": [
+    0.6667,
+    6
+   ],
+   "POLICY_AMENDMENT.amendment_type": [
+    1.0,
+    15
+   ],
+   "POLICY_AMENDMENT.dob": [
+    1.0,
+    15
+   ],
+   "POLICY_AMENDMENT.effective_date": [
+    1.0,
+    15
+   ],
+   "POLICY_AMENDMENT.policy_number": [
+    1.0,
+    15
+   ],
+   "POLICY_AMENDMENT.policyholder": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.dea_number": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.drugs": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.patient_dob": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.patient_name": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.prescriber": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.prescriber_npi": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.rx_date": [
+    1.0,
+    15
+   ]
+  },
+  "misses": [
+   "claim_PT_82132.patient_dob: gt='11/14/1951' got=None",
+   "id_PT_15075.expiry_date: gt='2025-05-04' got=None",
+   "id_PT_67125.policy_number: gt='MED-GLD-1327691' got=None",
+   "id_PT_99687.policy_number: gt='MED-GLD-6218367' got=None"
+  ]
+ },
+ "retrieval": {
+  "recall@3": 1.0,
+  "mrr": 1.0,
+  "queries": 43,
+  "misses": []
+ },
+ "decision": {
+  "accuracy_all": 0.961,
+  "n_all": 77,
+  "accuracy_visible": 1.0,
+  "n_visible": 74,
+  "by_type": {
+   "ID_DOCUMENT": 0.8667,
+   "CLAIM_FORM": 0.9333,
+   "DISCHARGE_SUMMARY": 1.0,
+   "PRESCRIPTION": 1.0,
+   "POLICY_AMENDMENT": 1.0,
+   "UNKNOWN": 1.0
+  },
+  "confusion": {
+   "APPROVE->APPROVE": 62,
+   "ESCALATE->APPROVE": 1,
+   "ESCALATE->ESCALATE": 4,
+   "REJECT->APPROVE": 2,
+   "REJECT->REJECT": 8
+  },
+  "wrong": [
+   "claim_PT_69470: expected ESCALATE got APPROVE (R4_default) [label not visible] - all checks passed",
+   "id_PT_57795: expected REJECT got APPROVE (R4_default) [label not visible] - all checks passed",
+   "id_PT_74454: expected REJECT got APPROVE (R4_default) [label not visible] - all checks passed"
+  ]
+ },
+ "cases": {
+  "accuracy": 0.8235,
+  "n": 17,
+  "wrong": [
+   "C_004: expected ESCALATE got APPROVE",
+   "C_013: expected REJECT got APPROVE",
+   "C_029: expected REJECT got APPROVE"
+  ]
+ },
+ "fraud": {
+  "detected": {
+   "amount_under_10k (not visible)": "0/1",
+   "date_conflict": "1/1",
+   "proc_diag_mismatch": "1/1"
+  },
+  "false_positive_docs": []
+ },
+ "edge_cases": {
+  "expired_id": "3/3",
+  "expiring_soon_id": "2/2",
+  "missing_fields": "3/3",
+  "tampered_id (not visible)": "0/2",
+  "uncovered_procedure": "2/2",
+  "unknown_document": "2/2"
+ },
+ "ops": {
+  "cases": 17,
+  "docs": 77,
+  "case_latency_s": {
+   "p50": 15.9,
+   "p95": 22.9,
+   "max": 22.851311500009615
+  },
+  "cost_usd_new_calls": 0.8143,
+  "cold_cost_usd": 1.684,
+  "cold_cost_per_case_usd": 0.0991,
+  "cold_cost_per_doc_usd": 0.0219,
+  "llm_calls": 129,
+  "cache_hits": 78,
+  "retries_by_agent": {
+   "extractor": 3
+  },
+  "cold_cost_by_agent": {
+   "preprocess": 0.0,
+   "classifier": 0.0095,
+   "extractor": 0.8566,
+   "fraud": 0.1256,
+   "kyc_visual": 0.0,
+   "claims": 0.0,
+   "policy": 0.5749,
+   "kyc": 0.0,
+   "justify": 0.1173
+  },
+  "mean_grounding_rate": 0.9794,
+  "mean_support_rate": 0.9847
+ },
+ "by_language": {},
+ "calibration": {
+  "all": {
+   "n": 77,
+   "accuracy": 0.961,
+   "raw": {
+    "ece": 0.0773,
+    "brier": 0.0525,
+    "bins": [
+     {
+      "lo": 0.2,
+      "hi": 0.3,
+      "n": 1,
+      "mean_conf": 0.3,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 2,
+      "mean_conf": 0.736,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 17,
+      "mean_conf": 0.8198,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 57,
+      "mean_conf": 0.9765,
+      "accuracy": 0.9474
+     }
+    ]
+   },
+   "calibrated": {
+    "ece": 0.0208,
+    "brier": 0.0381,
+    "bins": [
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 77,
+      "mean_conf": 0.9818,
+      "accuracy": 0.961
+     }
+    ]
+   }
+  },
+  "visible": {
+   "n": 74,
+   "accuracy": 1.0,
+   "raw": {
+    "ece": 0.0743,
+    "brier": 0.0175,
+    "bins": [
+     {
+      "lo": 0.2,
+      "hi": 0.3,
+      "n": 1,
+      "mean_conf": 0.3,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 2,
+      "mean_conf": 0.736,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 17,
+      "mean_conf": 0.8198,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 54,
+      "mean_conf": 0.9776,
+      "accuracy": 1.0
+     }
+    ]
+   },
+   "calibrated": {
+    "ece": 0.0181,
+    "brier": 0.0007,
+    "bins": [
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 74,
+      "mean_conf": 0.9819,
+      "accuracy": 1.0
+     }
+    ]
+   }
+  },
+  "fitted_on_this_split": true
+ },
+ "spend_this_run_usd": 0.8143,
+ "graph_seconds": 253.0
+}

@@ -249,3 +249,8 @@ class ChatScope(BaseModel):
     accessible: list[ChatSourceInfo]
     restricted: list[ChatSourceInfo]
     examples: list[str]
+
+
+class CaseProgress(BaseModel):
+    events: list[EventOut]
+    status: str

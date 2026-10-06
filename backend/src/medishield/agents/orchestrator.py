@@ -120,6 +120,13 @@ def agent_summaries(per_doc: list[dict], fraud: FraudResult | None) -> dict[str,
 
 def justify(case_id: str, case_decision: str, docs: list[DocumentDecision],
             summaries: dict[str, str]) -> tuple[str, AgentRun]:
+    if case_decision == "APPROVE" and all(d.decision.value == "APPROVE" and d.reasons == ["all checks passed"] for d in docs):
+        # nothing to explain beyond the rule engine: a template says the same as the model, for free and at once
+        for d in docs:
+            d.justification = f"All checks passed for this {d.doc_type.value.lower().replace('_', ' ')} (rule {d.rule_id})."
+        checks = ", ".join(k for k in ("kyc", "claims", "policy", "fraud") if k in summaries)
+        return (f"Approved: all {len(docs)} documents passed every check ({checks}). "
+                f"{summaries.get('policy', '')}".strip(), AgentRun(agent="justify"))
     payload = {"case_decision": case_decision, "agent_summaries": summaries,
                "documents": [{"doc_id": d.doc_id, "type": d.doc_type.value, "decision": d.decision.value,
                               "rule": d.rule_id, "evidence": d.reasons} for d in docs]}

@@ -558,3 +558,19 @@ def test_eval_endpoint_returns_only_pipeline_runs(client, auth, tmp_path, monkey
     (d / "reranker.json").write_text(json.dumps([{"model": "m"}]))
     monkeypatch.setenv("MEDISHIELD_EVAL_DIR", str(d))
     assert list(client.get("/ops/eval", headers=auth("reviewer")).json()) == ["official-dev"]
+
+
+def test_progress_returns_new_events_and_status_in_one_call(client, auth, fake_pipeline):
+    cid = upload(client, auth("submitter")).json()["case_id"]
+    p = client.get(f"/cases/{cid}/progress", headers=auth("submitter")).json()
+    assert p["status"] in ("IN_REVIEW", "DECIDED") and p["events"]
+    last = max(e["id"] for e in p["events"])
+    assert client.get(f"/cases/{cid}/progress", params={"after": last}, headers=auth("submitter")).json()["events"] == []
+    from conftest import add_user
+    from medishield.api.security import Role
+    from medishield.db.repo import repo_scope
+    add_user("submitter2", Role.SUBMITTER.value, "pw-two")
+    tok = client.post("/auth/login", json={"username": "submitter2", "password": "pw-two"}).json()["access_token"]
+    assert client.get(f"/cases/{cid}/progress", headers={"Authorization": f"Bearer {tok}"}).status_code == 404
+    with repo_scope() as db:
+        assert db.case_header(cid).status == p["status"]

@@ -23,7 +23,7 @@ function sla(c: CaseSummary) {
 function Approval({ c }: { c: CaseSummary }) {
   const { user, can } = useAuth()
   const decide = useDecideOverride(c.id)
-  const ovs = useQuery({ queryKey: ["overrides", c.id], queryFn: () => api<OverrideOut[]>(`/cases/${c.id}/overrides`), refetchInterval: 5000 })
+  const ovs = useQuery({ queryKey: ["overrides", c.id], queryFn: () => api<OverrideOut[]>(`/cases/${c.id}/overrides`), refetchInterval: 30000 })
   const o = ovs.data?.find((x) => x.status === "PENDING_APPROVAL")
   if (!o) return null
   const mine = o.requested_by === user?.username
@@ -59,7 +59,7 @@ function Approval({ c }: { c: CaseSummary }) {
 export default function ReviewPage() {
   const router = useRouter()
   const { can } = useAuth()
-  const q = useQuery({ queryKey: ["review-queue"], queryFn: () => api<CaseSummary[]>("/review/queue"), refetchInterval: 5000, enabled: can("review:queue") })
+  const q = useQuery({ queryKey: ["review-queue"], queryFn: () => api<CaseSummary[]>("/review/queue"), refetchInterval: 15000, enabled: can("review:queue") })
   const rows = q.data ?? []
   const waiting = rows.filter((c) => c.pending_override)
 

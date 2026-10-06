@@ -43,7 +43,7 @@ function CasePage() {
   const q = useQuery({
     queryKey: ["case", id],
     queryFn: () => api<CaseDetail>(`/cases/${id}`),
-    refetchInterval: (query) => (["RECEIVED", "PROCESSING"].includes(query.state.data?.status ?? "") ? 1500 : false),
+    refetchInterval: (query) => (["RECEIVED", "PROCESSING"].includes(query.state.data?.status ?? "") ? 5000 : false),     // live progress comes from the events hook
   })
   const detail = q.data
   const { events, state } = useCaseEvents(id, () => qc.invalidateQueries({ queryKey: ["case", id] }), run)

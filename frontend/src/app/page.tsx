@@ -56,13 +56,13 @@ export default function Dashboard() {
       if (decision !== "all") q.set("decision", decision)
       return api<CaseSummary[]>(`/cases?${q}`)
     },
-    refetchInterval: (query) => (query.state.data?.some((c) => c.display_status === "Processing") ? 2000 : 10000),
+    refetchInterval: (query) => (query.state.data?.some((c) => c.display_status === "Processing") ? 5000 : 30000),
   })
   const summary = useQuery({
     queryKey: ["ops-summary"],
     queryFn: () => api<Summary>("/ops/summary"),
     enabled: can("ops:read"),
-    refetchInterval: 10000,
+    refetchInterval: 60000,
   })
   const s = summary.data
 

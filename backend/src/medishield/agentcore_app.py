@@ -25,6 +25,26 @@ app = BedrockAgentCoreApp()
 ROLE = os.environ.get("AGENT_ROLE", "pipeline")
 
 
+def _preload() -> None:
+    """Load the heavy parts while the microVM starts, instead of halfway through the first case or question."""
+    try:
+        _init()
+        from medishield.rag.retrieve import get_store
+
+        if ROLE == "pipeline":
+            import medishield.pipeline  # noqa: F401
+            from medishield.ocr.engine import _engine
+
+            _engine("default")
+        get_store()
+    except Exception:
+        log.exception("preload failed (work will load on first use)")
+
+
+if os.environ.get("AGENTCORE_PRELOAD", "1") == "1" and os.environ.get("DOCKER_CONTAINER"):
+    threading.Thread(target=_preload, daemon=True, name="preload").start()
+
+
 def _run_case(case_id: str, task_id: int) -> None:
     from medishield.records import get_records
     from medishield.services import cases

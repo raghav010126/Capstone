@@ -55,12 +55,19 @@ done
 
 echo "== stage 2: the application"
 deploy "$TAG"
+echo "== log retention for the agents (their log groups are created by AgentCore; keep 14 days, not forever)"
+for g in $(aws logs describe-log-groups --log-group-name-prefix /aws/bedrock-agentcore/runtimes/ --query 'logGroups[].logGroupName' --output text); do
+  aws logs put-retention-policy --log-group-name "$g" --retention-in-days 14
+done
 echo "== AgentCore runtimes: ready + MMDSv2"
 uv run --python 3.12 python scripts/aws_agentcore_check.py "$(out PipelineRuntimeArn)" "$(out AssistantRuntimeArn)"
 
 echo "== website"
 STATIC_EXPORT=1 NEXT_PUBLIC_API_URL=/api scripts/web.sh run build
-aws s3 sync frontend/out "s3://$(out WebBucketName)" --delete --only-show-errors
+WEB="s3://$(out WebBucketName)"
+# hashed build files never change: browsers keep them for a year; pages are revalidated so a deploy shows up at once
+aws s3 sync frontend/out/_next/static "$WEB/_next/static" --cache-control "public,max-age=31536000,immutable" --only-show-errors
+aws s3 sync frontend/out "$WEB" --exclude "_next/static/*" --cache-control "no-cache" --delete --only-show-errors
 aws cloudfront create-invalidation --distribution-id "$(out DistributionId)" --paths '/*' >/dev/null
 
 SITE="$(out SiteUrl)"

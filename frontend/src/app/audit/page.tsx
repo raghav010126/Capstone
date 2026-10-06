@@ -40,7 +40,7 @@ export default function AuditPage() {
       if (action !== "all") q.set("action", action)
       return api<AuditOut[]>(`/audit?${q}`)
     },
-    refetchInterval: 8000,
+    refetchInterval: 30000,
     enabled: allowed,
   })
   const c = chain.data

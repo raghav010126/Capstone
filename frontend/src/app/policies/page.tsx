@@ -39,7 +39,7 @@ export default function PoliciesPage() {
   const list = useQuery({
     queryKey: ["policies"],
     queryFn: () => api<PolicyOut[]>("/policies"),
-    refetchInterval: (q) => (q.state.data?.some((p) => p.status === "INGESTING") ? 1500 : false),
+    refetchInterval: (q) => (q.state.data?.some((p) => p.status === "INGESTING") ? 3000 : false),
     enabled: can("policy:read"),
   })
   const ranges = useQuery({ queryKey: ["ranges", open?.id], queryFn: () => api<{ plan: string; ranges: Range[] }>(`/policies/${open!.id}/ranges`), enabled: !!open })

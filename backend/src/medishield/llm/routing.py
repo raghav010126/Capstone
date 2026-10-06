@@ -26,8 +26,10 @@ ROUTES: dict[str, Route] = {
     "classifier": Route(SONNET, "low", 4000, retry_model=OPUS, image_long_edge=1100),
     "extract": Route(SONNET, "medium", 12000, retry_model=OPUS),
     "kyc_visual": Route(SONNET, "medium", 6000, retry_model=OPUS),
-    "policy": Route(OPUS, "high", 16000),
-    "fraud": Route(OPUS, "high", 16000),
+    # coverage itself comes from the parsed exclusion table; the model picks the benefit row and adds conditions
+    "policy": Route(SONNET, "medium", 16000),   # A/B on dev: identical decisions and coverage, -33% cost per case
+    # deterministic rules score fraud; the model writes the narrative and adds small, capped extra signals
+    "fraud": Route(SONNET, "low", 6000),
     "justify": Route(SONNET, "low", 3000),
     # role-aware assistant
     "chat_router": Route(SONNET, "low", 2000),

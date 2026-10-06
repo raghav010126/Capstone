@@ -180,7 +180,8 @@ def extract(path: str, doc_type: DocType, lines: list[OcrLine], q: QualityMetric
 
     res = structured_with_retry(
         "extract", system, parts, read_model, tag=tag,
-        accept=lambda o: support_of(o) >= RETRY_SUPPORT_BELOW and not q.blur_suspected,
+        # a blurred page is capped at low confidence whatever is read, so re-reading it on the larger model can't change the outcome
+        accept=lambda o: support_of(o) >= RETRY_SUPPORT_BELOW or q.blur_suspected,
         prefer=lambda new, old: support_of(new) >= support_of(old))
     values = res.parsed.model_dump()
     fields = ground(values, lines, records)

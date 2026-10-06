@@ -265,6 +265,11 @@ class DynamoRepo(Repo):
                     setattr(case, c.name, _decode(c, i.get(c.name)))
         return case
 
+    def case_header(self, case_id):
+        """One small eventually consistent read of the META item (no documents, no decision JSON)."""
+        r = self.table.get_item(Key={"pk": f"CASE#{case_id}", "sk": "META"}).get("Item")
+        return self._case_from(r, []) if r else None
+
     def _light(self, case_id_item: dict) -> Case:
         """A list-view case: scalars and document stubs only (no decision/fraud JSON, no extractions). Do not save it."""
         case_id = case_id_item["id"]
@@ -388,9 +393,22 @@ class DynamoRepo(Repo):
     def _ovr_from(self, item: dict) -> Override:
         return from_item(Override, item, cols=self._OVR_COLS, id=int(item["oid"]))
 
+    OVR_STATUSES = ("PENDING_APPROVAL", "APPLIED", "REJECTED")
+
+    def _mark_status(self, ov) -> None:
+        """A small marker per override and status (pk OVRSTAT#<status>), so "which cases have a pending override" is one Query
+        instead of a full-table Scan on every list refresh."""
+        sk = f"{ov.case_id}#{_num(ov.id, 10)}"
+        with self.table.batch_writer() as bw:
+            for st in self.OVR_STATUSES:
+                if st != ov.status:
+                    bw.delete_item(Key={"pk": f"OVRSTAT#{st}", "sk": sk})
+            bw.put_item(Item={"pk": f"OVRSTAT#{ov.status}", "sk": sk, "case_id": ov.case_id})
+
     def add_override(self, ov):
         ov.id = self._counter("override")
         self._put(self._ovr_item(ov))
+        self._mark_status(ov)
         return ov
 
     def get_override(self, case_id, override_id):
@@ -402,20 +420,13 @@ class DynamoRepo(Repo):
 
     def save_override(self, ov):
         self._put(self._ovr_item(ov))
+        self._mark_status(ov)
 
     def pending_override(self, case_id):
         return next((o for o in self.list_overrides(case_id) if o.status == "PENDING_APPROVAL"), None)
 
     def case_ids_with_override_status(self, status):
-        out: set[str] = set()
-        kw: dict[str, Any] = {"FilterExpression": Attr("sk").begins_with("OVR#") & Attr("status").eq(status),
-                              "ProjectionExpression": "case_id"}
-        while True:
-            r = self.table.scan(**kw)
-            out |= {i["case_id"] for i in r["Items"]}
-            if "LastEvaluatedKey" not in r:
-                return out
-            kw["ExclusiveStartKey"] = r["LastEvaluatedKey"]
+        return {i["case_id"] for i in self._query(f"OVRSTAT#{status}", projection="case_id")}
 
     # ── audit chain ──────────────────────────────────────────────────────────────────────────────────
     _AUD_COLS = _columns(AuditEvent, skip=("seq",))
@@ -447,8 +458,10 @@ class DynamoRepo(Repo):
     def list_audit(self, *, case_id, action, limit, offset):
         if case_id:
             rows = self._query(f"CASE#{case_id}", sk_prefix="AUDIT#", index="gsi1", reverse=True)
+        elif action:
+            rows = self._query("AUDIT", reverse=True)            # filtered views are rare; plain listing reads only one page
         else:
-            rows = self._query("AUDIT", reverse=True)
+            rows = self._query("AUDIT", reverse=True, limit=offset + limit)
         out = [self._aud_from(i) for i in rows if not action or i.get("action") == action]
         return out[offset: offset + limit]
 

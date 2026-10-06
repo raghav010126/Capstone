@@ -66,6 +66,26 @@
     }
    }
   },
+  "/auth/config": {
+   "get": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Auth Config",
+    "description": "Public: whether the local demo passwords (<user>-demo) exist, so the sign-in page knows what its role buttons can do.",
+    "operationId": "auth_config_auth_config_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
   "/auth/me": {
    "get": {
     "tags": [
@@ -559,6 +579,65 @@
       "content": {
        "application/json": {
         "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/cases/{case_id}/progress": {
+   "get": {
+    "tags": [
+     "cases"
+    ],
+    "summary": "Case Progress",
+    "description": "New events since ``after`` plus the case status, in one cheap call (for UIs that poll instead of streaming).",
+    "operationId": "case_progress_cases__case_id__progress_get",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "case_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Case Id"
+      }
+     },
+     {
+      "name": "after",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 0,
+       "default": 0,
+       "title": "After"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CaseProgress"
+        }
        }
       }
      },
@@ -1512,6 +1591,79 @@
      }
     ]
    }
+  },
+  "/chat/warm": {
+   "post": {
+    "tags": [
+     "chat"
+    ],
+    "summary": "Chat Warm",
+    "description": "Start the assistant (and load its search models) before the first question. No model call, no cost.\n\nAgentCore gives every session its own microVM, so this warms the session the conversation will use.",
+    "operationId": "chat_warm_chat_warm_post",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "conversation_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "pattern": "^[A-Za-z0-9_-]{4,100}$",
+       "default": "warm",
+       "title": "Conversation Id"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/chat/memory": {
+   "delete": {
+    "tags": [
+     "chat"
+    ],
+    "summary": "Chat Forget",
+    "description": "Delete everything the assistant remembers about the caller (conversations, facts, preferences).",
+    "operationId": "chat_forget_chat_memory_delete",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
   }
  },
  "components": {
@@ -1939,6 +2091,27 @@
      "cost_usd"
     ],
     "title": "CaseDetail"
+   },
+   "CaseProgress": {
+    "properties": {
+     "events": {
+      "items": {
+       "$ref": "#/components/schemas/EventOut"
+      },
+      "type": "array",
+      "title": "Events"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     }
+    },
+    "type": "object",
+    "required": [
+     "events",
+     "status"
+    ],
+    "title": "CaseProgress"
    },
    "CaseSummary": {
     "properties": {

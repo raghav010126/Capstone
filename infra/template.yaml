@@ -218,7 +218,7 @@ Resources:
       RoleArn: !GetAtt AgentRole.Arn
       NetworkConfiguration: {NetworkMode: PUBLIC}
       ProtocolConfiguration: HTTP
-      LifecycleConfiguration: {IdleRuntimeSessionTimeout: 120, MaxLifetime: 3600}    # free the microVM 2 min after a case
+      LifecycleConfiguration: {IdleRuntimeSessionTimeout: 60, MaxLifetime: 3600}     # free the microVM 1 min after a case
       EnvironmentVariables:
         AGENT_ROLE: pipeline
         DYNAMO_TABLE: !Ref Table

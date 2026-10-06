@@ -62,11 +62,17 @@ dev (96.1% / 100%).
 
 ### 6. Per-step model routing with escalation
 **Choice.**
-- Sonnet 5.5 handles perception and summaries.
-- Opus 5.5 handles policy and fraud reasoning, plus retries when a Sonnet output fails a validation check.
+- Sonnet 5.5 handles perception, policy, fraud and summaries.
+- Opus 5.5 handles retries when a Sonnet output fails a validation check, and gives the second opinion on suspected tampering.
 - KYC tamper flags need *both* models to agree, because a false tamper flag is a hard rejection.
 
-**Why.** Opus where reasoning matters, Sonnet where reading matters, at about $0.12 per case.
+**Why.**
+- Policy and fraud originally ran on Opus at high effort. In both, the deciding work is deterministic: coverage comes from the
+  exclusion table, and fraud is scored by rules. The model picks the benefit row, adds conditions, writes the narrative and
+  adds small, capped signals.
+- A/B on dev and then on held-out: moving both to Sonnet gave **identical decisions and coverage on every document**, and cost
+  per case fell from $0.127 to $0.082 (−36%).
+- The justification uses a template for fully clean approvals, where a model would only restate "all checks passed".
 
 **Cost.** The two-model agreement misses subtle tampering that only one model sees. That is acceptable, because a missed
 tamper still escalates on other signals more often than it approves.
@@ -154,3 +160,30 @@ in-process assistant / AgentCore Runtime.
 - **Schema changes:** an additive auto-migration covers new columns. Anything larger would need Alembic.
 - **Demo passwords:** `<user>-demo` exist only locally. The live site uses private passwords, and there are no public demo
   accounts by design, because model spend is real.
+
+## Scaling next steps (not needed at demo scale)
+
+A cost and performance review found these items. At demo volume they cost cents; at the brief's volume (85,000 documents,
+about 17,000 cases a month) they would matter.
+
+- **Duplicate detection without re-reading history.** Today the claims registry is rebuilt from every decided case before each
+  new case, which grows as O(N) per case and O(N²) overall. The fix is to write small keyed items (claim number, image hash,
+  member + service date) when a case is decided, so the duplicate check becomes a few point reads.
+- **List views without per-case reads.** Store the document count and a compact per-document summary on the case record, add a
+  status index for the review queue, and keep dashboard KPIs as running counters, so lists and `/ops/summary` stop loading every
+  case.
+- **Document images through signed S3 links and previews.** Today images go through the API, so every view costs a Lambda
+  invocation. Signed links with ~1600 px previews would be cheaper and faster. They would also lift a limit: a Lambda response
+  can't exceed 6 MB, so scans larger than that don't display today.
+- **A warm pool of pipeline sessions.** Every case currently starts its own AgentCore microVM. Reusing a few sessions would
+  remove most cold starts. This needs the claims registry to be per-request (see the first point).
+- **Data retention.** Uploaded files expire after 60 days. Case records should get a retention policy (DynamoDB TTL) to match.
+
+Already applied from the same review:
+- Overrides keep small status markers, replacing a full-table scan on every list refresh.
+- The audit list reads one page instead of the whole chain.
+- One `/progress` call per poll replaces two, and polling pauses in hidden tabs.
+- Polling intervals are relaxed; batched, length-sorted embedding and reranking cut the index build from 4.4 s to 1.8 s.
+- The fraud check runs beside the specialists, and the search models load when an agent starts.
+- Retries that cannot change the outcome are skipped.
+- Model-step changes were measured on dev (see the evaluation report).

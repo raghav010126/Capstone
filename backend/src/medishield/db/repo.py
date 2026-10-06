@@ -48,6 +48,10 @@ class Repo(ABC):
     # ── cases and their documents ────────────────────────────────────────────────────────────────────
     @abstractmethod
     def get_case(self, case_id: str) -> Any: ...
+    def case_header(self, case_id: str) -> Any:
+        """Only the case's scalar fields (status, owner, ...): no documents or agent output. For status polling."""
+        return self.get_case(case_id)
+
     @abstractmethod
     def find_case_by_idempotency(self, username: str, key: str) -> Any: ...
     @abstractmethod

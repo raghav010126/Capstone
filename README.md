@@ -20,11 +20,15 @@ Prompts and thresholds were tuned on the **dev** split only. Everything else was
 
 | Run | Docs | Classification | Claim-field extraction | Policy retrieval R@3 | Decisions (all labels) | Decisions (labels visible in the image) | Cost / case |
 |---|---|---|---|---|---|---|---|
-| Official dataset, dev | 77 | 100% | 100% | 100% | 96.1% | 100% | $0.12 |
-| Official dataset, **held-out** | 78 | 100% | 100% | 100% | 96.2% | 100% | $0.13 |
+| Official dataset, dev | 77 | 100% | 100% | 100% | 96.1% | 100% | $0.08 |
+| Official dataset, **held-out** | 78 | 100% | 100% | 100% | 96.2% | 100% | $0.08 |
 | **Unseen set** (generator seed 7, never inspected) | 155 | 100% | 100% | 100% | 96.1% | 100% | $0.12 |
 | Unseen set with tampering, name mismatch and blur actually drawn | 155 | 100% | 100% | 100% | 98.1% | 99.4% | $0.12 |
 | Spanish + Hindi documents, held-out | 40 | 100% | 100% | 100% | 95.0% | 95.0% | $0.14 |
+
+Costs are uncached model spend per case. The two official rows use the current model routing. The other rows were run with the
+earlier routing (Opus for policy and fraud, about $0.12 per case): an A/B on dev and held-out showed identical decisions at 36%
+lower cost, so the routing was switched.
 
 **Why two decision columns?** The instructors' generator records a few labels it never draws: three "tampered" IDs, one name
 mismatch and one structuring fraud ([docs/dataset_findings.md](docs/dataset_findings.md)). No system can see those, so I report
@@ -70,7 +74,7 @@ flowchart LR
   end
 
   SP --> Q[("Qdrant (in-memory)<br/>bge-small + BM25 → RRF → jina reranker")]
-  PIPE --> LLM["Claude Sonnet 5.5 (perception, summaries)<br/>Claude Opus 5.5 (policy, fraud, retries)"]
+  PIPE --> LLM["Claude Sonnet 5.5 (perception, policy, fraud, summaries)<br/>Claude Opus 5.5 (retries, tamper second opinion)"]
   ASSIST --> LLM
   ASSIST <--> MEM[("AgentCore Memory<br/>conversation + per-user")]
   PIPE -. traces .-> LS["LangSmith (PHI-scrubbed)"]
@@ -83,8 +87,8 @@ flowchart LR
 | OCR / pre-processor | RapidOCR (local, free) + quality metrics; extractor grounds **every field** against the OCR lines and returns `{fields, raw_text, bounding_boxes}` | RapidOCR, Sonnet 5.5 |
 | KYC agent | Member DB match, expiry **at the date of service**, typography forensics (retyped dates), advisory ELA, two-model visual tamper review, near-miss name rule | Sonnet + Opus agreement |
 | Claims agent | ICD-10 / CPT / NPI / amount validation against the claim standard | deterministic |
-| Policy agent (RAG) | Docling ingestion → hybrid search (dense + BM25, RRF, reranked) with section/page citations; **coverage is decided by the parsed exclusion table**, and the model may only make a code *less* automatic | Opus 5.5 |
-| Fraud agent | Duplicate claims (claim number, member/date/amount, perceptual image hash), frequency and billing-pattern baselines from claim history, plus model-found anomalies | rules + Opus 5.5 |
+| Policy agent (RAG) | Docling ingestion → hybrid search (dense + BM25, RRF, reranked) with section/page citations; **coverage is decided by the parsed exclusion table**, and the model may only make a code *less* automatic | Sonnet 5.5 (Opus measured: same accuracy, higher cost) |
+| Fraud agent | Duplicate claims (claim number, member/date/amount, perceptual image hash), frequency and billing-pattern baselines from claim history, plus model-found anomalies | rules + Sonnet 5.5 |
 | Orchestrator | The brief's rules in `decision_policy.yaml` (deterministic, unit-tested); the model only writes the justification | Sonnet 5.5 |
 | Case UI | Dashboard, case detail (document viewer with evidence boxes, collapsible agent panels, live pipeline graph), review queue with override and four-eyes approval, audit log, insights, assistant | Next.js 16, shadcn, TanStack Query, React Flow |
 
@@ -225,8 +229,9 @@ The key decisions and their trade-offs, plus an honest list of what does not wor
 - **Models read, rules decide.** LLMs read documents and write explanations; a versioned, unit-tested rule file makes every
   decision.
 - **Evidence-based confidence.** Confidence comes from grounding, agent agreement and image quality, not from what the model says.
-- **Measure before shipping.** Every optimisation was A/B-tested on dev, for example OCR-first routing (25% cheaper, same
-  accuracy) and a 7× smaller reranker (better MRR on the gold set).
+- **Measure before shipping.** Every optimisation was A/B-tested, for example OCR-first routing (25% cheaper, same accuracy),
+  Sonnet instead of Opus for policy and fraud (36% cheaper per case, identical decisions on dev and held-out) and a 7× smaller
+  reranker (better MRR on the gold set).
 
 ## Repository layout
 

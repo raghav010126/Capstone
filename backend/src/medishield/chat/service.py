@@ -104,6 +104,12 @@ def answer(payload: dict) -> dict:
 
     memory = get_memory()
     history = memory.history(user.username, conversation)
+    # long-term recall runs while the router thinks (both are network calls on AWS)
+    from concurrent.futures import ThreadPoolExecutor
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    recalled_f = pool.submit(memory.recall, user.username, question)
+    pool.shutdown(wait=False)
     r, how = router.classify(question, history, tag=tag)
     q = r.standalone_question or question
 
@@ -162,7 +168,10 @@ def answer(payload: dict) -> dict:
         return _result(" ".join(("I couldn't find anything for that in the sources available to you. " + note).split()), r.route, user,
                        conversation=conversation, how=how)
     numbered = "\n\n".join(f"[{i}] {p.title}" + (f" (p.{p.page})" if p.page else "") + f"\n{p.text}" for i, p in enumerate(passages, 1))
-    recalled = memory.recall(user.username, q)
+    try:
+        recalled = recalled_f.result(timeout=10)
+    except Exception:  # noqa: BLE001 - memory is a nicety; never fail an answer on it
+        recalled = []
     context = ("Earlier in this conversation:\n" + "\n".join(f"{t['role']}: {t['text'][:500]}" for t in history) + "\n\n" if history else "") + \
               (f"Things this user asked before: {' | '.join(recalled)}\n\n" if recalled else "")
     msg = (f"{context}User role: {access.ROLE_LABELS[user.role]}\nQuestion: {q}\n\nPassages:\n{numbered}"
@@ -172,5 +181,7 @@ def answer(payload: dict) -> dict:
     except LLMError as e:
         return _result(f"The assistant could not answer right now ({e}).", r.route, user, passages=passages,
                        conversation=conversation, how=how)
-    memory.remember(user.username, conversation, question, out.answer)
+    import threading
+
+    threading.Thread(target=memory.remember, args=(user.username, conversation, question, out.answer), daemon=True).start()
     return _result(out.answer, r.route, user, passages=passages, cited=out.cited, sql=sql, conversation=conversation, how=how)
