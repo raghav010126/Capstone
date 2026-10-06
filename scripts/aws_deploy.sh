@@ -31,7 +31,7 @@ fi
 
 echo "== secrets -> SSM Parameter Store (values are read from .env and never printed)"
 set -a; . ./.env; set +a
-put() { [ -n "${2:-}" ] && aws ssm put-parameter --name "/medishield/$1" --type SecureString --overwrite --value "$2" >/dev/null && echo "  stored $1"; }
+put() { [ -z "${2:-}" ] && return 0; aws ssm put-parameter --name "/medishield/$1" --type SecureString --overwrite --value "$2" >/dev/null && echo "  stored $1"; }
 put anthropic_api_key "${ANTHROPIC_API_KEY:-}"
 put langsmith_api_key "${LANGSMITH_API_KEY:-}"
 put langsmith_project "${LANGSMITH_PROJECT:-medishield-capstone}"
