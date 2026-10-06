@@ -117,6 +117,7 @@ pattern as my earlier RBAC chatbot assignment: access is enforced **where the da
 - **Memory:** follow-ups ("and on Silver?") and per-user memory across sessions (AgentCore Memory); text is PHI-redacted before
   storage. "Clear my memory" deletes it.
 - **Warm-up:** opening the page starts the agent and loads its search models, so the first answer isn't slow.
+- **MCP server:** the same tools and role permissions for Claude Code and Claude Desktop at `/api/mcp` ([docs/mcp.md](docs/mcp.md)).
 
 | | |
 |---|---|
