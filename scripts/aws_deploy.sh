@@ -30,12 +30,16 @@ else
 fi
 
 echo "== secrets -> SSM Parameter Store (values are read from .env and never printed)"
+[ "${INBOUND_EMAIL_DOMAIN+x}" = x ] && _INBOUND_FROM_CLI="$INBOUND_EMAIL_DOMAIN"     # the command line wins over .env
 set -a; . ./.env; set +a
+[ -n "${_INBOUND_FROM_CLI+x}" ] && INBOUND_EMAIL_DOMAIN="$_INBOUND_FROM_CLI"
 put() { [ -z "${2:-}" ] && return 0; aws ssm put-parameter --name "/medishield/$1" --type SecureString --overwrite --value "$2" >/dev/null && echo "  stored $1"; }
 put anthropic_api_key "${ANTHROPIC_API_KEY:-}"
 put langsmith_api_key "${LANGSMITH_API_KEY:-}"
 put langsmith_project "${LANGSMITH_PROJECT:-medishield-capstone}"
-[ -z "${INTAKE_SENDERS:-}" ] || put intake_senders "$INTAKE_SENDERS"   # email intake allow-list {"address": "username"}
+# email intake allow-list {"address": "username"}; an empty value revokes every sender (the stored copy is removed)
+if [ -n "${INTAKE_SENDERS:-}" ]; then put intake_senders "$INTAKE_SENDERS"
+else aws ssm delete-parameter --name /medishield/intake_senders >/dev/null 2>&1 || true; fi
 aws ssm get-parameter --name /medishield/jwt_secret >/dev/null 2>&1 || put jwt_secret "$(python3 -c 'import secrets;print(secrets.token_urlsafe(48))')"
 
 if ! aws ssm get-parameter --name /medishield/admin_password >/dev/null 2>&1; then     # admin-only site: password goes to a private file

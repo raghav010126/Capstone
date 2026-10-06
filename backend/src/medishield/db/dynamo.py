@@ -469,6 +469,7 @@ class DynamoRepo(Repo):
 
     # ── audit chain ──────────────────────────────────────────────────────────────────────────────────
     _AUD_COLS = _columns(AuditEvent, skip=("seq",))
+    INDEXED_AUDIT_ACTIONS: ClassVar[tuple[str, ...]] = ("document_reclassified",)   # read by /ops/quality
 
     def _aud_from(self, item: dict) -> AuditEvent:
         return from_item(AuditEvent, item, cols=self._AUD_COLS, seq=int(item["seq"]))
@@ -484,10 +485,13 @@ class DynamoRepo(Repo):
             ev = AuditEvent(seq=seq, ts=ts, actor=actor, action=action, case_id=case_id, detail=detail, prev_hash=prev,
                             hash=chain.chain_hash(prev, chain.canonical(ts, actor, action, case_id, detail)))
             item = {**to_item(ev, self._AUD_COLS), "pk": "AUDIT", "sk": _num(seq, 12), "seq": seq}
+            indexed = action in self.INDEXED_AUDIT_ACTIONS
             if case_id:
                 item.update(gsi1pk=f"CASE#{case_id}", gsi1sk=f"AUDIT#{_num(seq, 12)}")
             try:
                 self._put(item, ConditionExpression=Attr("pk").not_exists())
+                if indexed:                                      # small marker: find these events without a full read
+                    self.table.put_item(Item={"pk": f"AUDITACT#{action}", "sk": _num(seq, 12), "seq": seq})
                 return ev
             except ClientError as e:
                 if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
@@ -497,6 +501,10 @@ class DynamoRepo(Repo):
     def list_audit(self, *, case_id, action, limit, offset):
         if case_id:
             rows = self._query(f"CASE#{case_id}", sk_prefix="AUDIT#", index="gsi1", reverse=True)
+        elif action in self.INDEXED_AUDIT_ACTIONS:
+            marks = self._query(f"AUDITACT#{action}", reverse=True, limit=offset + limit, projection="seq")
+            rows = self._batch_get([{"pk": "AUDIT", "sk": _num(int(m["seq"]), 12)} for m in marks])
+            rows.sort(key=lambda i: int(i["seq"]), reverse=True)
         elif action:
             rows = self._query("AUDIT", reverse=True)            # filtered views are rare; plain listing reads only one page
         else:

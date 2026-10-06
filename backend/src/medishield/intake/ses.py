@@ -19,6 +19,7 @@ import logging
 import re
 
 from medishield.api.uploads import UploadError
+from medishield.services.cases import should_enqueue
 
 log = logging.getLogger(__name__)
 INBOUND_PREFIX = "inbound/"
@@ -74,9 +75,10 @@ def process(ses: dict) -> dict:
             case, _warnings, created = service.submit(db, owner, parsed, "ses")
             result = {"status": "created" if created else "duplicate", "case_id": case.id}
         except UploadError as e:
-            service.reject(db, "system", "ses", service.domain_of(claimed), str(e))
+            # internet mail is unauthenticated: log rejections (CloudWatch) instead of growing the audit chain with them
+            log.warning("inbound mail rejected (sender domain %s): %s", service.domain_of(claimed), e)
             result = {"status": "rejected", "reason": str(e)}
-    if result["status"] == "created":
+    if case is not None and should_enqueue(case, result["status"] == "created"):
         queue.enqueue_case(case.id)
     _discard(key)
     log.info("inbound mail %s: %s", ses_id, result.get("reason", result["status"]))

@@ -260,8 +260,8 @@ def test_ses_failed_verdict_is_rejected_and_never_processed(ses, verdict):
     out = handler(ses_event("m2", **{verdict: "FAIL"}), None)["results"][0]
     assert out["status"] == "rejected" and f"{verdict}=FAIL" in out["reason"] and queued == []
     assert not stored(s3, "inbound/m2")
-    rejected = [d for a, _, d in audit_actions() if a == "email_rejected"]
-    assert rejected == [{"channel": "ses", "sender_domain": "clinic.example", "reason": out["reason"]}]
+    # unauthenticated internet mail is logged, not written to the audit chain (it must not be able to grow it)
+    assert [a for a, _, _d in audit_actions() if a == "email_rejected"] == []
     assert not any(a == "case_created" for a, _, _ in audit_actions())
 
 
@@ -285,8 +285,7 @@ def test_ses_unknown_sender_and_forged_from_are_rejected(ses):
     s3.put_object(Bucket="docs", Key="inbound/m6", Body=eml(sender="mallory@evil.example"))
     out = handler(ses_event("m6"), None)["results"][0]                      # SES evaluated Sam; the stored message says otherwise
     assert out["status"] == "rejected" and queued == []
-    domains = [d["sender_domain"] for a, _, d in audit_actions() if a == "email_rejected"]
-    assert domains == ["evil.example", "clinic.example"]
+    assert [a for a, _, _d in audit_actions() if a == "email_rejected"] == []   # logged, not audited (unauthenticated)
 
 
 def test_template_email_resources_are_optional_and_use_a_real_handler():

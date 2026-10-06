@@ -14,6 +14,7 @@ from medishield.db.repo import Repo
 from medishield.intake import service
 from medishield.intake.email import parse
 from medishield.intake.settings import intake_settings
+from medishield.services.cases import should_enqueue
 from medishield.worker.queue import enqueue_case
 
 router = APIRouter(tags=["intake"])
@@ -59,11 +60,13 @@ async def email_intake(request: Request, response: Response, user: Principal = D
     except UploadError as e:
         service.reject(db, user.username, "api", domain, str(e), ip=client_key(request))
         db.commit()
-        raise HTTPException(e.status, str(e)) from e
+        # submitters get one generic answer, so they can't probe which addresses are allow-listed or mapped to whom
+        detail = "this sender may not submit cases by email" if e.status == 403 and user.role == Role.SUBMITTER else str(e)
+        raise HTTPException(e.status, detail) from e
     db.commit()
-    if created:
+    if should_enqueue(case, created):
         enqueue_case(case.id)
-    else:
+    if not created:
         response.status_code = 200
     return S.CaseCreated(case_id=case.id, status=case.status, documents=[d.doc_id for d in case.documents],
                          warnings=warnings, idempotent_replay=not created)

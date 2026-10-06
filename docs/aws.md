@@ -125,3 +125,8 @@ TOKEN=$(curl -s localhost:8100/auth/login -H 'content-type: application/json' \
           -d '{"username":"submitter","password":"submitter-demo"}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')
 curl -s localhost:8100/intake/email -H "authorization: Bearer $TOKEN" -H 'content-type: message/rfc822' --data-binary @claim.eml
 ```
+
+**Size limit on AWS:** `POST /intake/email` goes through the API Lambda, whose requests are capped at 6 MB, so an uploaded
+`.eml` must be under about 4 MB (attachments are base64-encoded inside it). Mail arriving through SES has no such limit: SES
+writes it to S3 and the email function reads it from there.
+

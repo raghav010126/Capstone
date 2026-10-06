@@ -90,6 +90,17 @@ def create_case(db: Repo, user: Principal, files: list[tuple[str, bytes]],
     return case, warnings, True
 
 
+def should_enqueue(case, created: bool, stale_after_s: float = 60.0) -> bool:
+    """Queue a new case, or re-queue a replayed one that is still RECEIVED a minute after creation - the first enqueue failed
+    (e.g. the runtime throttled), and an idempotent retry must not leave it stuck."""
+    if created:
+        return True
+    if getattr(case, "status", None) != "RECEIVED" or case.created_at is None:
+        return False
+    created_at = case.created_at if case.created_at.tzinfo else case.created_at.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - created_at).total_seconds() > stale_after_s
+
+
 # ── events ───────────────────────────────────────────────────────────────────────────────────────────
 def emit(case_id: str, ev: dict) -> None:
     """Record a progress event in its own short transaction (worker use)."""

@@ -159,9 +159,9 @@ def _create(request: Request, response: Response, user: Principal, db: Repo, blo
         db.commit()
         raise HTTPException(e.status, str(e)) from e
     db.commit()
-    if created:
+    if svc.should_enqueue(case, created):
         enqueue_case(case.id)
-    else:
+    if not created:
         response.status_code = 200
     return S.CaseCreated(case_id=case.id, status=case.status, documents=[d.doc_id for d in case.documents],
                          warnings=warnings, idempotent_replay=not created)

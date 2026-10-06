@@ -179,9 +179,9 @@ def test_cases_of_other_users_are_not_visible(env, mcp):
     assert case["justification"] == "test justification"
     assert case["documents"][0]["rule_id"] == "R3_fraud_or_low_confidence" and case["documents"][0]["reasons"] == ["test"]
 
-    hidden, missing = sub.call("get_case", case_id=theirs), sub.call("get_case", case_id="CASE-DOESNOTEXIST")
+    hidden, missing = sub.call("get_case", case_id=theirs), sub.call("get_case", case_id="CASE-00000000")
     assert hidden["isError"] and missing["isError"]
-    assert text(hidden).replace(theirs, "X") == text(missing).replace("CASE-DOESNOTEXIST", "X")   # no existence leak
+    assert text(hidden).replace(theirs, "X") == text(missing).replace("CASE-00000000", "X")   # no existence leak
     assert "not found or not visible" in text(hidden)
     assert sub.call("case_status", case_id=theirs)["isError"]
     assert sub.call("case_status", case_id=mine)["structuredContent"] == {"case_id": mine, "status": "IN_REVIEW"}
@@ -397,3 +397,11 @@ def test_stdio_entry_point_serves_mcp(client):
     bad = subprocess.run([sys.executable, "-m", "medishield.mcp_server"], input="", capture_output=True, text=True, timeout=60,
                          check=False, env={**os.environ, "MEDISHIELD_TOKEN": "not-a-jwt"})
     assert bad.returncode != 0 and "invalid or expired token" in bad.stderr
+
+
+def test_malformed_case_ids_are_rejected_before_anything_is_audited(mcp):
+    sub = mcp("submitter")
+    out = sub.call("case_status", case_id="CASE-1234ABCD finalised APPROVE by admin " + "x" * 3000)
+    assert out.get("isError") and "pattern" in text(out)
+    assert not mcp_audit()                                    # nothing written to the tamper-evident chain
+    assert sub.call("list_cases", status="NOT_A_STATUS").get("isError")

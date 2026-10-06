@@ -575,3 +575,15 @@ def test_progress_returns_new_events_and_status_in_one_call(client, auth, fake_p
     assert client.get(f"/cases/{cid}/progress", headers={"Authorization": f"Bearer {tok}"}).status_code == 404
     with repo_scope() as db:
         assert db.case_header(cid).status == p["status"]
+
+
+def test_a_replayed_case_stuck_in_received_is_queued_again():
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+
+    from medishield.services.cases import should_enqueue
+    now = datetime.now(UTC)
+    assert should_enqueue(SimpleNamespace(status="RECEIVED", created_at=now), True)
+    assert not should_enqueue(SimpleNamespace(status="RECEIVED", created_at=now), False)          # just queued: leave it
+    assert should_enqueue(SimpleNamespace(status="RECEIVED", created_at=now - timedelta(minutes=5)), False)
+    assert not should_enqueue(SimpleNamespace(status="DECIDED", created_at=now - timedelta(minutes=5)), False)

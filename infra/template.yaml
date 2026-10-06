@@ -125,7 +125,7 @@ Resources:
           PolicyDocument:
             Statement:
               - Effect: Allow
-                Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:BatchWriteItem"]
+                Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:BatchWriteItem", "dynamodb:BatchGetItem"]
                 Resource: [!GetAtt Table.Arn, !Sub "${Table.Arn}/index/*"]
               - {Effect: Allow, Action: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource: !Sub "${DocsBucket.Arn}/*"}
               - Effect: Allow
@@ -438,6 +438,28 @@ Resources:
     Condition: HasInboundEmail
     Properties: {LogGroupName: !Sub "/aws/lambda/${Project}-email", RetentionInDays: 7}
 
+  # the email function only reads/deletes inbound mail, writes case files, uses the table and starts the pipeline
+  EmailRole:
+    Type: AWS::IAM::Role
+    Condition: HasInboundEmail
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: "sts:AssumeRole"}]
+      ManagedPolicyArns: ["arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"]
+      Policies:
+        - PolicyName: email
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:BatchWriteItem"]
+                Resource: [!GetAtt Table.Arn, !Sub "${Table.Arn}/index/*"]
+              - {Effect: Allow, Action: ["s3:GetObject", "s3:DeleteObject"], Resource: !Sub "${DocsBucket.Arn}/inbound/*"}
+              - {Effect: Allow, Action: "s3:PutObject", Resource: !Sub "${DocsBucket.Arn}/cases/*"}
+              - {Effect: Allow, Action: ["ssm:GetParametersByPath", "ssm:GetParameter"], Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmPrefix}*"}
+              - Effect: Allow
+                Action: "bedrock-agentcore:InvokeAgentRuntime"
+                Resource: [!GetAtt PipelineRuntime.AgentRuntimeArn, !Sub "${PipelineRuntime.AgentRuntimeArn}/*"]
+
   EmailFunction:
     Type: AWS::Lambda::Function
     Condition: HasInboundEmail
@@ -451,7 +473,7 @@ Resources:
         EntryPoint: ["python", "-m", "awslambdaric"]
         Command: ["medishield.intake.ses.handler"]
         WorkingDirectory: /app
-      Role: !GetAtt FunctionRole.Arn
+      Role: !GetAtt EmailRole.Arn
       MemorySize: 1536
       Timeout: 120
       Environment:

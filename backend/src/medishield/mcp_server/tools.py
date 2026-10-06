@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any, Literal, TypeVar
 
 import anyio.to_thread
 from fastapi import HTTPException
@@ -116,7 +116,7 @@ def check_coverage(cpt_code: Annotated[str, Field(description="5-character proce
 
 
 @server.tool(annotations=READ_ONLY)
-def get_case(case_id: Annotated[str, Field(description="case id, e.g. CASE-1A2B3C4D")]) -> dict[str, Any]:
+def get_case(case_id: Annotated[str, Field(description="case id, e.g. CASE-1A2B3C4D", pattern=r"^CASE-[0-9A-Fa-f]{8}$")]) -> dict[str, Any]:
     """One case: status, automated and final decision, confidence, amount, justification, and each document's decision with
     the rule and reasons. Submitters only see their own cases."""
     from medishield.api.deps import get_case as visible_case
@@ -136,8 +136,8 @@ def get_case(case_id: Annotated[str, Field(description="case id, e.g. CASE-1A2B3
 
 
 @server.tool(annotations=READ_ONLY)
-def list_cases(status: Annotated[str | None, Field(
-                   description="RECEIVED, PROCESSING, DECIDED, IN_REVIEW, FINALIZED or FAILED")] = None,
+def list_cases(status: Annotated[Literal["RECEIVED", "PROCESSING", "DECIDED", "IN_REVIEW", "FINALIZED", "FAILED"] | None, Field(
+                   description="only cases with this status")] = None,
                limit: Annotated[int, Field(ge=1, le=200, description="at most this many, newest first")] = 20) -> dict[str, Any]:
     """Recent cases, newest first, like GET /cases. Submitters only get their own cases."""
     from medishield.api.routes import cases
@@ -163,7 +163,7 @@ def review_queue() -> dict[str, Any]:
 
 
 @server.tool(annotations=READ_ONLY)
-def case_status(case_id: Annotated[str, Field(description="case id, e.g. CASE-1A2B3C4D")]) -> dict[str, Any]:
+def case_status(case_id: Annotated[str, Field(description="case id, e.g. CASE-1A2B3C4D", pattern=r"^CASE-[0-9A-Fa-f]{8}$")]) -> dict[str, Any]:
     """Only the status of a case (one cheap read; use it to poll a case that is still processing)."""
     def go(user: Principal, db: Repo) -> dict[str, Any]:
         require("case:read")(user)
