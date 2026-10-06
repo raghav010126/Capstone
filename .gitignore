@@ -36,3 +36,6 @@ eval/runs/
 # deploy build context
 build/
 .aws-admin-login
+
+# parallel agent worktrees
+.claude/worktrees/
