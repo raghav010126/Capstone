@@ -123,6 +123,8 @@ production scale.
 - The case pipeline and the assistant run on Bedrock AgentCore Runtime. The pipeline runs as a background task; the assistant
   runs in sessions with AgentCore Memory.
 - Data lives in DynamoDB on-demand and S3, with a static UI on CloudFront.
+- Uploaded policy PDFs are parsed by their own Lambda (Docling on CPU-only PyTorch), which is too big for the agents' image. It
+  publishes the parsed index to S3, where new agent sessions pick it up.
 - One CloudFormation stack; images are built in CodeBuild (ARM64).
 
 **Why.** Idle cost is about $1/month. Agents get managed, isolated microVM sessions with long timeouts. Nothing bills while idle.
@@ -147,8 +149,12 @@ in-process assistant / AgentCore Runtime.
   as possible OCR noise.
 - **Duplicate detection:** works on near-identical images, but templated synthetic pages can look like duplicates. Two
   Spanish/Hindi held-out cases escalated for that reason.
-- **Policy upload on the live site:** not available. Docling and PyTorch exceed AgentCore's 2 GB image limit. The two bundled
-  policies are pre-parsed and built into the image; upload works locally. A separate Docling Lambda would close the gap.
+- **Policy upload on the live site:** works, through a separate Docling Lambda with its own image, because Docling and PyTorch
+  exceed AgentCore's 2 GB image limit. Its limits:
+  - PDFs of at most about 4 MB, because a Lambda request is capped at 6 MB. Locally the limit is 25 MB.
+  - A parse takes one to two minutes, including a cold start.
+  - A new policy applies from the next agent session: the next case, or the next new assistant conversation.
+  - A parse that times out or runs out of memory is not retried and stays INGESTING (a parse error is recorded as FAILED).
 - **Persisted graph resume:** human-review resume uses the persisted graph locally only (see decision 11).
 - **Real-time updates on AWS:** delivered by polling every 1.5 s, not WebSockets.
 - **Assistant scope:**
@@ -177,7 +183,7 @@ about 17,000 cases a month) they would matter.
   can't exceed 6 MB, so scans larger than that don't display today.
 - **A warm pool of pipeline sessions.** Every case currently starts its own AgentCore microVM. Reusing a few sessions would
   remove most cold starts. This needs the claims registry to be per-request (see the first point).
-- **Data retention.** Uploaded files expire after 60 days. Case records should get a retention policy (DynamoDB TTL) to match.
+- **Data retention.** Uploaded case files expire after 60 days (uploaded policies are kept). Case records should get a retention policy (DynamoDB TTL) to match.
 
 Already applied from the same review:
 - Overrides keep small status markers, replacing a full-table scan on every list refresh.

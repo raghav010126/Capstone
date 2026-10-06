@@ -11,10 +11,15 @@ from medishield.api.security import Principal, require
 from medishield.api.uploads import UploadError
 from medishield.db.repo import Repo
 from medishield.services import policies as svc
+from medishield.services.policy_s3 import lambda_ingest
 from medishield.worker.queue import enqueue_policy
 
 router = APIRouter(tags=["policies"])
 MAX_POLICY_BYTES = 25 * 1024 * 1024
+
+
+def docling_installed() -> bool:
+    return importlib.util.find_spec("docling") is not None
 
 
 def out(p) -> S.PolicyOut:
@@ -72,7 +77,7 @@ def policy_ranges(policy_id: int, _: Principal = Depends(require("policy:read"))
 @router.post("/policies", response_model=S.PolicyOut, status_code=202)
 async def upload_policy(plan: str = Form(..., pattern=r"^[a-z][a-z0-9_]{1,23}$"), file: UploadFile = File(...),
                         user: Principal = Depends(require("policy:upload")), db: Repo = Depends(get_db)):
-    if importlib.util.find_spec("docling") is None:
+    if not (lambda_ingest() or docling_installed()):          # on AWS the ingest Lambda has Docling; the API image does not
         raise HTTPException(501, "policy ingestion needs the Docling parser, which this deployment does not include; "
                                  "the bundled policies are in use")
     data = await file.read(MAX_POLICY_BYTES + 1)
@@ -83,6 +88,10 @@ async def upload_policy(plan: str = Form(..., pattern=r"^[a-z][a-z0-9_]{1,23}$")
     except UploadError as e:
         raise HTTPException(e.status, str(e)) from e
     db.commit()
-    enqueue_policy(pid)
+    try:
+        enqueue_policy(pid)
+    except Exception as e:                                    # never leave a policy INGESTING that nothing will finish
+        svc.mark_failed(pid, f"ingestion could not be started: {type(e).__name__}")
+        raise HTTPException(503, "policy ingestion could not be started; try again") from e
     return out(db.get_policy(pid))
 

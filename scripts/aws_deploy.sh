@@ -42,11 +42,14 @@ if ! aws ssm get-parameter --name /medishield/admin_password >/dev/null 2>&1; th
   echo "  admin login written to .aws-admin-login (git-ignored)"
 fi
 
-echo "== build the Lambda image in CodeBuild"
+echo "== build the images in CodeBuild (app; policy ingest unless POLICY_INGEST=0)"
 TAG="$(date +%Y%m%d%H%M%S)"
+INGEST_TAG="ingest-$TAG"; [ "${POLICY_INGEST:-1}" = 1 ] || INGEST_TAG=none
 uv run --python 3.12 python scripts/aws_bundle.py build/source.zip
 aws s3 cp build/source.zip "s3://$(out SourceBucketName)/source.zip" --only-show-errors
-BUILD_ID="$(aws codebuild start-build --project-name "$(out BuildProject)" --environment-variables-override name=IMAGE_TAG,value="$TAG" --query build.id --output text)"
+BUILD_ID="$(aws codebuild start-build --project-name "$(out BuildProject)" --query build.id --output text \
+  --timeout-in-minutes-override 60 \
+  --environment-variables-override name=IMAGE_TAG,value="$TAG" name=INGEST_TAG,value="$INGEST_TAG")"   # 60: a cap for two images, billed per minute used
 while :; do
   S="$(aws codebuild batch-get-builds --ids "$BUILD_ID" --query 'builds[0].buildStatus' --output text)"
   [ "$S" = IN_PROGRESS ] || break; sleep 20
@@ -54,7 +57,7 @@ done
 [ "$S" = SUCCEEDED ] || { echo "image build $S - see CodeBuild log for $BUILD_ID"; exit 1; }
 
 echo "== stage 2: the application"
-deploy "$TAG"
+deploy "$TAG" IngestImageTag="$INGEST_TAG"
 echo "== log retention for the agents (their log groups are created by AgentCore; keep 14 days, not forever)"
 for g in $(aws logs describe-log-groups --log-group-name-prefix /aws/bedrock-agentcore/runtimes/ --query 'logGroups[].logGroupName' --output text); do
   aws logs put-retention-policy --log-group-name "$g" --retention-in-days 14

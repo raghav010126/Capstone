@@ -1,13 +1,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  MediShield serverless deployment. Pay-per-use only: Bedrock AgentCore Runtime (agents), Lambda (API), DynamoDB on-demand, S3,
-  CloudFront (cheapest price class).
+  MediShield serverless deployment. Pay-per-use only: Bedrock AgentCore Runtime (agents), Lambda (API, policy ingestion),
+  DynamoDB on-demand, S3, CloudFront (cheapest price class).
   No NAT gateway, no WAF, no provisioned capacity. Stage 1 (ImageTag=none) creates only the image registry and the image builder;
   stage 2 (ImageTag=<built tag>) adds the application. `scripts/aws_destroy.sh` removes everything.
 
 Parameters:
   Project: {Type: String, Default: medishield}
   ImageTag: {Type: String, Default: none, Description: "'none' for stage 1; the pushed image tag for stage 2"}
+  IngestImageTag: {Type: String, Default: none, Description: "the pushed policy-ingest image tag (ingest-<tag>); 'none' leaves out policy upload"}
   AlertEmail: {Type: String, Description: "Receives the cost alerts"}
   MonthlyBudgetUsd: {Type: Number, Default: 10, Description: "AWS bill alert threshold (not a hard stop)"}
   ModelBudgetUsd: {Type: Number, Default: 10, Description: "Hard cap on Anthropic spend by the live site (the laptop has its own cap; together they stay within the project budget)"}
@@ -18,6 +19,7 @@ Parameters:
 
 Conditions:
   HasImage: !Not [!Equals [!Ref ImageTag, none]]
+  HasIngest: !And [!Condition HasImage, !Not [!Equals [!Ref IngestImageTag, none]]]
 
 Resources:
   # ── image registry and builder (no Docker needed on the laptop) ────────────────────────────────────
@@ -27,7 +29,8 @@ Resources:
       RepositoryName: !Ref Project
       EmptyOnDelete: true
       LifecyclePolicy:
-        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"keep two images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":2},"action":{"type":"expire"}}]}'
+        # two of each image: policy-ingest (ingest-<tag>) and app (tags are build timestamps, 2026...); untagged leftovers after a day
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"keep two ingest images","selection":{"tagStatus":"tagged","tagPrefixList":["ingest-"],"countType":"imageCountMoreThan","countNumber":2},"action":{"type":"expire"}},{"rulePriority":2,"description":"keep two app images","selection":{"tagStatus":"tagged","tagPrefixList":["2"],"countType":"imageCountMoreThan","countNumber":2},"action":{"type":"expire"}},{"rulePriority":3,"description":"untagged","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":1},"action":{"type":"expire"}}]}'
 
   SourceBucket:
     Type: AWS::S3::Bucket
@@ -94,7 +97,7 @@ Resources:
       PublicAccessBlockConfiguration: {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
       LifecycleConfiguration:
         Rules:
-          - {Id: expire, Status: Enabled, ExpirationInDays: 60}
+          - {Id: expire, Status: Enabled, Prefix: cases/, ExpirationInDays: 60}     # uploaded policies (policies/) are kept
           - {Id: abandoned-uploads, Status: Enabled, Prefix: uploads/, ExpirationInDays: 1}
       CorsConfiguration:                       # browsers upload case files straight to S3 with one-time signed forms
         CorsRules: [{AllowedMethods: [POST], AllowedOrigins: ["*"], AllowedHeaders: ["*"], MaxAge: 3000}]
@@ -131,6 +134,10 @@ Resources:
                 Action: ["bedrock-agentcore:InvokeAgentRuntime"]
                 Resource: [!GetAtt PipelineRuntime.AgentRuntimeArn, !Sub "${PipelineRuntime.AgentRuntimeArn}/*",
                            !GetAtt AssistantRuntime.AgentRuntimeArn, !Sub "${AssistantRuntime.AgentRuntimeArn}/*"]
+              - !If
+                - HasIngest
+                - {Effect: Allow, Action: "lambda:InvokeFunction", Resource: !GetAtt IngestFunction.Arn}
+                - !Ref "AWS::NoValue"
 
   # ── agents: Bedrock AgentCore Runtime (one ARM64 image; AGENT_ROLE picks the agent) ─────────────────
   AgentRole:
@@ -263,6 +270,7 @@ Resources:
           MEDISHIELD_DEMO_USERS: !Ref DemoUsers
           MEDISHIELD_VISION: !Ref VisionMode
           LANGSMITH_TRACING_V2: "false"
+          POLICY_INGEST_FUNCTION: !If [HasIngest, !Ref IngestFunction, ""]
 
   # keeps one API instance warm so signing in is not a cold start: 8,640 pings/month, well inside the Lambda free tier
   ApiKeepWarm:
@@ -291,6 +299,51 @@ Resources:
     Type: AWS::Lambda::Permission
     Condition: HasImage
     Properties: {Action: "lambda:InvokeFunction", FunctionName: !Ref ApiFunction, Principal: "*", InvokedViaFunctionUrl: true}
+
+  # ── policy ingestion: Docling + CPU PyTorch do not fit the 2 GB agent image, so uploads are parsed by their own Lambda ──────
+  # Invoked asynchronously by the API, once per uploaded policy; it reads the PDF from S3, writes the parsed index next to it and
+  # marks the policy READY in DynamoDB. Pay-per-use: a parse takes one to two minutes at 3 GB, under half a cent; idle costs nothing.
+  IngestRole:
+    Type: AWS::IAM::Role
+    Condition: HasIngest
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: "sts:AssumeRole"}]
+      ManagedPolicyArns: ["arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"]
+      Policies:
+        - PolicyName: ingest
+          PolicyDocument:
+            Statement:
+              - {Effect: Allow, Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query"], Resource: !GetAtt Table.Arn}
+              - {Effect: Allow, Action: ["s3:GetObject", "s3:PutObject"], Resource: !Sub "${DocsBucket.Arn}/policies/*"}
+
+  IngestLogs:
+    Type: AWS::Logs::LogGroup
+    Condition: HasIngest
+    Properties: {LogGroupName: !Sub "/aws/lambda/${Project}-ingest", RetentionInDays: 7}
+
+  IngestFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasIngest
+    DependsOn: IngestLogs
+    Properties:
+      FunctionName: !Sub "${Project}-ingest"
+      Description: Parses uploaded policy PDFs with Docling (sections, exclusion table) into the index the agents load
+      PackageType: Image
+      Code: {ImageUri: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repo}:${IngestImageTag}"}
+      Architectures: [arm64]                                # entry point and handler are set in infra/Dockerfile.ingest
+      Role: !GetAtt IngestRole.Arn
+      MemorySize: 3008                                      # Docling's layout and table models on CPU; also ~2 vCPUs
+      Timeout: 900
+      Environment:
+        Variables:
+          DYNAMO_TABLE: !Ref Table
+          S3_BUCKET: !Ref DocsBucket
+
+  IngestInvokeConfig:                                       # no automatic retries: a PDF that fails is marked FAILED, not parsed 3 times
+    Type: AWS::Lambda::EventInvokeConfig
+    Condition: HasIngest
+    Properties: {FunctionName: !Ref IngestFunction, Qualifier: "$LATEST", MaximumRetryAttempts: 0, MaximumEventAgeInSeconds: 3600}
 
   # ── website: static files from S3, /api/* to the Lambda ──────────────────────────────────────────
   Oac:
@@ -387,3 +440,4 @@ Outputs:
   PipelineRuntimeArn: {Condition: HasImage, Value: !GetAtt PipelineRuntime.AgentRuntimeArn}
   AssistantRuntimeArn: {Condition: HasImage, Value: !GetAtt AssistantRuntime.AgentRuntimeArn}
   ChatMemoryId: {Condition: HasImage, Value: !GetAtt ChatMemory.MemoryId}
+  IngestFunctionName: {Condition: HasIngest, Value: !Ref IngestFunction}

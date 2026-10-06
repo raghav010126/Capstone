@@ -65,6 +65,19 @@ def _invoke_agentcore(task: str, **arg) -> None:
         raise RuntimeError(f"pipeline runtime did not accept {task}: {body}")
 
 
+def _invoke_ingest_lambda(policy_id: int) -> None:
+    """Hand a policy PDF to the Docling Lambda (Docling does not fit the agent image). Asynchronous: Lambda queues it, answers 202."""
+    import json
+
+    import boto3
+
+    s = get_settings()
+    resp = boto3.client("lambda", region_name=s.aws_region).invoke(
+        FunctionName=s.policy_ingest_function, InvocationType="Event", Payload=json.dumps({"policy_id": policy_id}).encode())
+    if resp.get("StatusCode") != 202:
+        raise RuntimeError(f"policy ingest function did not accept policy {policy_id}: {resp.get('StatusCode')}")
+
+
 def enqueue_case(case_id: str) -> None:
     if get_settings().queue_backend == "agentcore":
         _invoke_agentcore("process_case", case_id=case_id)
@@ -75,7 +88,11 @@ def enqueue_case(case_id: str) -> None:
 
 
 def enqueue_policy(policy_id: int) -> None:
-    if get_settings().queue_backend == "agentcore":
+    from medishield.services.policy_s3 import lambda_ingest
+
+    if lambda_ingest():
+        _invoke_ingest_lambda(policy_id)
+    elif get_settings().queue_backend == "agentcore":
         _invoke_agentcore("ingest_policy", policy_id=policy_id)
     elif get_settings().queue_backend == "sqs":
         _send_sqs("ingest_policy", policy_id)

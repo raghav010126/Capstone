@@ -1,0 +1,57 @@
+# Policy ingestion Lambda: parses uploaded policy PDFs with Docling (handler: medishield.aws_ingest.handler). Built by CodeBuild
+# after the app image and pushed to the same ECR repository as ingest-<tag>. Docling needs PyTorch, which does not fit the 2 GB
+# AgentCore image, so it lives here.
+#   * arm64: PyTorch's CPU-only aarch64 wheel is the smallest (no MKL), Lambda arm64 costs 20% less per GB-second, and CodeBuild
+#     already builds on ARM (no emulation)
+#   * PyTorch from its CPU-only index: the PyPI wheels pull in CUDA, several GB that a CPU-only Lambda never uses
+#   * Docling's models are baked in, and the build parses a bundled policy with the network off as an unprivileged user, so the
+#     function never downloads anything or writes outside /tmp at run time
+FROM --platform=linux/arm64 python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PYTHONPATH=/app
+WORKDIR /app
+
+# requirements-*.txt are generated from uv.lock by scripts/aws_bundle.py: the app's dependencies plus Docling, with torch split out
+COPY requirements-torch.txt requirements-ingest.txt /app/
+RUN pip install --no-deps --index-url https://download.pytorch.org/whl/cpu -r requirements-torch.txt \
+ && pip install -r requirements-ingest.txt awslambdaric \
+ # the desktop OpenCV needs libxcb/GL, which these images do not have: use the headless build with the same version
+ && V=$(pip show opencv-python | sed -n 's/^Version: //p') && pip uninstall -y opencv-python \
+ && pip install "opencv-python-headless==$V" \
+ # fail the build if any CUDA package slipped in
+ && ! pip list --format=freeze | grep -iE '^(nvidia|cuda|triton)' \
+ && python -c "import torch; assert torch.version.cuda is None, torch.version.cuda" \
+ && find /usr/local/lib/python3.12 -name "*.pyc" -delete
+
+# Docling's layout, table-structure and OCR models; with DOCLING_ARTIFACTS_PATH set, Docling only reads them from here
+ENV DOCLING_ARTIFACTS_PATH=/opt/docling-models
+RUN docling-tools models download layout tableformer rapidocr -o /opt/docling-models
+
+COPY backend/src/medishield /app/medishield
+COPY data/official/dataset/policies /app/selfcheck
+# the build bundle is made on a laptop with owner-only file modes; the runtime user must be able to read everything
+RUN chmod -R a+rX /app /opt/docling-models
+
+# parse a bundled policy the way Lambda runs it (unprivileged, read-only image, no network): fail the build, not the first upload
+USER nobody
+RUN --network=none HOME=/tmp MEDISHIELD_CACHE=/tmp/selfcheck HF_HUB_OFFLINE=1 python - <<'PY'
+import shutil
+from pathlib import Path
+
+import medishield.aws_ingest  # noqa: F401  (the handler imports)
+from medishield.rag.ingest import load_or_ingest
+
+pdf = sorted(Path("/app/selfcheck").glob("*.pdf"))[0]
+idx = load_or_ingest(pdf)
+assert idx.chunks and idx.ranges, f"Docling found no sections or exclusion rows in {pdf.name}"
+print(f"ingest self-check ok: {pdf.name}, {len(idx.chunks)} sections, {len(idx.ranges)} exclusion rows")
+for leftover in ("/tmp/selfcheck", "/tmp/.cache"):
+    shutil.rmtree(leftover, ignore_errors=True)
+PY
+USER root
+
+# run-time settings: the function has no secrets and calls no model, only DynamoDB and S3 (table and bucket come from the template)
+ENV HOME=/tmp MEDISHIELD_CACHE=/tmp/cache MEDISHIELD_STATE_DIR=/tmp/state MEDISHIELD_DB=dynamodb STORAGE_BACKEND=s3 \
+    MEDISHIELD_LLM_CACHE=0 HF_HUB_OFFLINE=1 HF_HOME=/tmp/hf
+ENTRYPOINT ["python", "-m", "awslambdaric"]
+CMD ["medishield.aws_ingest.handler"]

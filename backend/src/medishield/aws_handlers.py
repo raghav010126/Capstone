@@ -34,15 +34,23 @@ def load_secrets() -> None:
 
 def link_baked_caches() -> None:
     """The image carries read-only model files (embedding models, policy index); the process cache dir must be writable, so it lives
-    in /tmp and the baked folders are linked into it."""
+    in /tmp and the baked folders are linked into it. The policy index folder is a real folder of links, so the indexes of uploaded
+    policies (fetched from S3) can be added beside the bundled ones."""
     baked, cache = os.environ.get("BAKED_CACHE"), os.environ.get("MEDISHIELD_CACHE")
     if not baked or not cache:
         return
     os.makedirs(cache, exist_ok=True)
     for name in os.listdir(baked):
-        dst = os.path.join(cache, name)
-        if not os.path.lexists(dst):
-            os.symlink(os.path.join(baked, name), dst)
+        src, dst = os.path.join(baked, name), os.path.join(cache, name)
+        if name == "policy_index":
+            if os.path.islink(dst):
+                os.unlink(dst)
+            os.makedirs(dst, exist_ok=True)
+            for f in os.listdir(src):
+                if not os.path.lexists(os.path.join(dst, f)):
+                    os.symlink(os.path.join(src, f), os.path.join(dst, f))
+        elif not os.path.lexists(dst):
+            os.symlink(src, dst)
 
 
 def _init() -> None:
