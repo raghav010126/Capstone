@@ -11,6 +11,7 @@ jobs:
     env:
       UV_PYTHON: "3.12"
       MEDISHIELD_TRACING: "0"
+      UV_NO_SYNC: "1"           # after the install step, `uv run` must not re-sync (that would pull Docling/PyTorch back in)
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -18,6 +19,13 @@ jobs:
           enable-cache: true
       - name: Install (without Docling / PyTorch, which only policy ingestion needs)
         run: uv sync --no-group ingest
+        env:
+          UV_NO_SYNC: "0"
+      - name: Generate the official dataset (seed 42) - the tests read its member and claim records
+        run: |
+          uv run python datagen/harness.py --seed 42 --out data/official
+          uv run python eval/truth.py data/official
+          uv run python datagen/records.py data/official
       - name: Lint
         run: uv run ruff check backend/src eval datagen scripts
       - name: Tests (SQLite)
