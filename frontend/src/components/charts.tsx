@@ -8,9 +8,14 @@ import { cn } from "@/lib/utils"
 const BAR = "#2a78d6"
 const GRID = "oklch(0.92 0 0)"
 
+/* Decision tones: the theme's semantic tokens (approve green, reject red, escalate amber). They fail colour-blind
+   separation on their own, so a toned mark always carries its decision as text or an icon too. */
+export type Tone = "approve" | "reject" | "escalate"
+export const TONE_BG: Record<Tone, string> = { approve: "bg-approve", reject: "bg-reject", escalate: "bg-escalate" }
+
 type Tip = { x: number; y: number; title: string; value: string; note?: string } | null
 
-function useTip() {
+export function useTip() {
   const [tip, setTip] = useState<Tip>(null)
   const show = (el: HTMLElement, title: string, value: string, note?: string) => {
     const r = el.getBoundingClientRect()
@@ -57,7 +62,7 @@ export function TableView({ head, rows }: { head: string[]; rows: (string | numb
   )
 }
 
-export type Bar = { label: string; value: number; n?: number; note?: string; display?: string }
+export type Bar = { label: string; value: number; n?: number; note?: string; display?: string; tone?: Tone }
 
 /**
  * Horizontal bars, one series. Bars are thin (16px), square at the baseline with a 4px rounded tip, grow from a
@@ -92,7 +97,7 @@ export function HBarChart({ bars, max = 1, format = (v: number) => `${(v * 100).
                   onFocus={(e) => tip.show(e.currentTarget, b.label, b.display ?? format(b.value), b.note ?? (b.n != null ? `${b.n} ${unit}` : undefined))}
                   onBlur={tip.hide}
                 >
-                  <div className="h-4 rounded-r-[4px] transition-opacity group-hover:opacity-80" style={{ width: `${w}%`, background: BAR, minWidth: w > 0 ? 3 : 0 }} />
+                  <div className={cn("h-4 rounded-r-[4px] transition-opacity group-hover:opacity-80", b.tone && TONE_BG[b.tone])} style={{ width: `${w}%`, background: b.tone ? undefined : BAR, minWidth: w > 0 ? 3 : 0 }} />
                   <span className="absolute text-xs font-semibold tabular-nums" style={{ left: `calc(${w}% + 8px)` }}>
                     {b.display ?? format(b.value)}
                   </span>

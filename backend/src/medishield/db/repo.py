@@ -69,6 +69,13 @@ class Repo(ABC):
     def all_cases(self) -> list[Any]: ...
     @abstractmethod
     def cases_by_status(self, status: str) -> list[Any]: ...
+    def case_headers(self) -> list[Any]:
+        """Every case's scalar fields (no documents; ``decision`` may be absent). For aggregate views."""
+        return self.all_cases()
+
+    def case_decisions(self, case_ids: Iterable[str]) -> dict[str, dict]:
+        """The stored decision JSON (CaseDecision dump) of each listed case that has one, in as few reads as possible."""
+        return {cid: c.decision for cid in case_ids if (c := self.get_case(cid)) is not None and c.decision}
 
     # ── agent runs ───────────────────────────────────────────────────────────────────────────────────
     @abstractmethod
@@ -97,6 +104,9 @@ class Repo(ABC):
     def pending_override(self, case_id: str) -> Any: ...
     @abstractmethod
     def case_ids_with_override_status(self, status: str) -> set[str]: ...
+    @abstractmethod
+    def all_overrides(self) -> list[Any]:
+        """Every override of every case, oldest first."""
 
     # ── audit chain (the hash logic lives in db.audit; storage lives here) ───────────────────────────
     @abstractmethod
@@ -185,6 +195,13 @@ class SqlRepo(Repo):
     def cases_by_status(self, status):
         return list(self.s.execute(select(Case).where(Case.status == status)).scalars().all())
 
+    def case_decisions(self, case_ids):
+        ids, out = list(case_ids), {}
+        for i in range(0, len(ids), 500):                     # stay under SQLite's bound-parameter limit
+            rows = self.s.execute(select(Case.id, Case.decision).where(Case.id.in_(ids[i:i + 500])))
+            out.update((cid, d) for cid, d in rows if d)
+        return out
+
     # runs
     def replace_agent_runs(self, case_id, runs):
         self.s.query(AgentRunRow).filter(AgentRunRow.case_id == case_id).delete()
@@ -231,6 +248,9 @@ class SqlRepo(Repo):
 
     def case_ids_with_override_status(self, status):
         return set(self.s.execute(select(Override.case_id).where(Override.status == status)).scalars())
+
+    def all_overrides(self):
+        return list(self.s.execute(select(Override).order_by(Override.id)).scalars().all())
 
     # audit
     def append_audit(self, actor, action, case_id, detail):

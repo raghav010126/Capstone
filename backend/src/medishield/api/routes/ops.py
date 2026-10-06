@@ -6,6 +6,7 @@ from medishield.api.deps import get_db
 from medishield.api.security import Principal, require
 from medishield.db.repo import Repo
 from medishield.llm.cost import ledger  # not medishield.llm: that loads the model SDK
+from medishield.services.quality import QualityOut, compute_quality
 
 router = APIRouter(tags=["ops"])
 # Business context from the assignment brief
@@ -70,4 +71,12 @@ def summary(_: Principal = Depends(require("ops:read")), db: Repo = Depends(get_
             "assumptions": "85,000 documents/month; escalated documents still cost baseline manual handling; "
                            "LLM cost from measured per-document spend; excludes infrastructure and staffing changes."},
     }
+
+
+@router.get("/ops/quality", response_model=QualityOut)
+def quality(_: Principal = Depends(require("ops:read")), db: Repo = Depends(get_db)):
+    """AI quality monitor: how human reviewers agree with the AI (overrides, reason codes, the rules they overturn,
+    reclassifications, four-eyes outcomes), for all time and for cases created in the last 30 days. Recorded data only;
+    no model calls."""
+    return compute_quality(db)
 

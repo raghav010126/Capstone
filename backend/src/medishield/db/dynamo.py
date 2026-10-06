@@ -212,6 +212,27 @@ class DynamoRepo(Repo):
                                    ExpressionAttributeValues={":one": 1}, ReturnValues="UPDATED_NEW")
         return int(r["Attributes"]["v"])
 
+    def _batch_get(self, keys: list[dict], projection: str | None = None, names: dict | None = None) -> list[dict]:
+        """BatchGetItem in pages of 100 keys, retrying unprocessed keys: a few calls instead of one read per item. Items come
+        back in no particular order. (The resource's client converts Python values to and from DynamoDB types.)"""
+        client, out = self.table.meta.client, []
+        for i in range(0, len(keys), 100):
+            req: dict[str, Any] = {"Keys": keys[i:i + 100]}
+            if projection:
+                req["ProjectionExpression"] = projection
+                req["ExpressionAttributeNames"] = names or {}
+            pending = {self.table_name: req}
+            for attempt in range(10):
+                r = client.batch_get_item(RequestItems=pending)
+                out += r.get("Responses", {}).get(self.table_name, [])
+                pending = r.get("UnprocessedKeys") or {}
+                if not pending:
+                    break
+                time.sleep(min(1.0, 0.05 * 2 ** attempt))
+            else:
+                raise RuntimeError("batch read kept returning unprocessed keys")
+        return out
+
     def _delete_all(self, pk: str, prefix: str) -> None:
         keys = self._query(pk, sk_prefix=prefix, projection="pk, sk")
         with self.table.batch_writer() as bw:
@@ -340,6 +361,15 @@ class DynamoRepo(Repo):
     def cases_by_status(self, status):
         return self._many([m for m in self._query("CASES", index="gsi1") if m.get("status") == status])
 
+    def case_headers(self):
+        """One paginated index query: META items only (no document stubs, no decision JSON)."""
+        return [self._case_from(m, []) for m in self._query("CASES", index="gsi1")]
+
+    def case_decisions(self, case_ids):
+        keys = [{"pk": f"CASE#{cid}", "sk": "DETAIL"} for cid in dict.fromkeys(case_ids)]
+        rows = self._batch_get(keys, projection="#pk, #d", names={"#pk": "pk", "#d": "decision"})
+        return {i["pk"].removeprefix("CASE#"): json.loads(i["decision"]) for i in rows if i.get("decision")}
+
     # ── agent runs ───────────────────────────────────────────────────────────────────────────────────
     _RUN_COLS = _columns(AgentRunRow, skip=("id",))
 
@@ -427,6 +457,15 @@ class DynamoRepo(Repo):
 
     def case_ids_with_override_status(self, status):
         return {i["case_id"] for i in self._query(f"OVRSTAT#{status}", projection="case_id")}
+
+    def all_overrides(self):
+        """The status markers name every override (sk ``<case id>#<override id>``); one batched read fetches them all."""
+        keys = {}
+        for st in self.OVR_STATUSES:
+            for m in self._query(f"OVRSTAT#{st}", projection="#sk", names={"#sk": "sk"}):
+                case_id, oid = m["sk"].rsplit("#", 1)
+                keys[(case_id, oid)] = {"pk": f"CASE#{case_id}", "sk": f"OVR#{oid}"}
+        return sorted((self._ovr_from(i) for i in self._batch_get(list(keys.values()))), key=lambda o: o.id)
 
     # ── audit chain ──────────────────────────────────────────────────────────────────────────────────
     _AUD_COLS = _columns(AuditEvent, skip=("seq",))

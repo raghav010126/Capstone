@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth"
 import { AppShell } from "@/components/app-shell"
 import { ChartCard, ConfusionMatrix, HBarChart, ReliabilityChart, type Bar, type RelBin } from "@/components/charts"
 import { Kpi } from "@/components/kpi"
+import { ReviewQuality } from "@/components/review-quality"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -244,6 +245,7 @@ export default function InsightsPage() {
           )}
         </div>
       )}
+      <ReviewQuality enabled={allowed} className="mt-8 border-t pt-6" />
     </AppShell>
   )
 }
