@@ -122,6 +122,16 @@ pattern as my earlier RBAC chatbot assignment: access is enforced **where the da
   decides visibility (someone else's case is "not visible").
 - **MCP server:** the same tools and role permissions for Claude Code and Claude Desktop at `/api/mcp` ([docs/mcp.md](docs/mcp.md)).
 
+## More product features
+
+| Feature | What it does |
+|---|---|
+| **AI quality monitor** (Insights) | How often reviewers keep or override the AI, which rules they disagree with, AI → final decision transitions, reason codes, confidence of overturned vs kept cases, four-eyes outcomes, time to final. Built from recorded overrides and audit events, so it needs no model calls |
+| **Ask about this case** | A side panel on the case page that scopes the assistant to that case ("why?", "what would change the decision?") with the same access checks |
+| **Policy upload on AWS** | An admin uploads a new policy PDF; a pay-per-use Docling Lambda parses it (exclusion table, clauses, pages), and new agent sessions use it. No code change for a new plan |
+| **Email intake** | `POST /intake/email` takes an .eml; with a domain configured, SES delivers mail from allow-listed senders straight into the pipeline (off by default, $0) |
+| **MCP server** | Claude Desktop / Claude Code use MediShield as tools: coverage checks, cases, review queue, the assistant, all under the caller's role |
+
 | | |
 |---|---|
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Sign-in](docs/screenshots/login.png) |
@@ -140,7 +150,7 @@ pattern as my earlier RBAC chatbot assignment: access is enforced **where the da
 - **Cost guardrails:**
   - A hard model-spend cap and a daily cap, enforced across all workers via atomic counters.
   - An AWS budget alert.
-  - Pay-per-use services only: about $1/month idle ([docs/aws.md](docs/aws.md)).
+  - Pay-per-use services only: about $1.25/month idle ([docs/aws.md](docs/aws.md)).
 
 ## Bonus challenges (all six)
 
@@ -223,7 +233,7 @@ The live deployment processed exactly this case in 92 s (including a cold start)
 - **Agents:** two Bedrock AgentCore Runtimes (pipeline and assistant) and AgentCore Memory.
 - **Operations:** SSM Parameter Store (secrets) and an AWS Budget alert.
 
-Idle cost is about $1/month. `scripts/aws_destroy.sh` removes everything. Details and the trade-offs against the local build
+Idle cost is about $1.25/month, mostly stored container images. `scripts/aws_destroy.sh` removes everything. Details and the trade-offs against the local build
 are in [docs/aws.md](docs/aws.md).
 
 ## Design decisions and limitations

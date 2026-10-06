@@ -238,7 +238,7 @@ arrow(Inches(3.3), Inches(2.65), Inches(4.0), Inches(2.65))
 arrow(Inches(6.6), Inches(2.5), Inches(7.4), Inches(2.5))
 arrow(Inches(6.6), Inches(2.9), Inches(7.4), Inches(4.4))
 text(s, Inches(0.7), Inches(5.55), Inches(6), Inches(1.1),
-     "One CloudFormation stack · ARM64 image built by CodeBuild · secrets in SSM\nPay-per-use only: about $1/month idle",
+     "One CloudFormation stack · ARM64 image built by CodeBuild · secrets in SSM\nPay-per-use only: about $1.25/month idle",
      13, INK)
 footer(s, 5)
 
@@ -302,6 +302,29 @@ for i, (t, dsc) in enumerate([
     text(s, Inches(0.7), y + Inches(0.4), Inches(5.3), Inches(0.7), dsc, 12, MUTED)
 footer(s, 8)
 
+# ── 9. beyond the brief ─────────────────────────────────────────────────────────────────────────────
+s = prs.slides.add_slide(BLANK)
+header(s, "Beyond the brief: a platform, not a demo", "Product")
+feats = [("MCP server", ("Claude Desktop and Claude Code use MediShield as tools: coverage checks, cases, review queue and the "
+                        "assistant, under the caller's own role, every call audited. Runs inside the API Lambda: $0 extra.")),
+         ("AI quality monitor", ("How often reviewers keep or override the AI, which rules they disagree with, AI → final "
+                                "transitions and time to final. From recorded data: no model calls.")),
+         ("Policy upload, no code change", ("An admin uploads a new policy PDF; a pay-per-use Docling Lambda parses the exclusion "
+                                           "table and clauses; new cases and chats use it.")),
+         ("Email intake + case copilot", ("Cases from allow-listed senders' email (SES, off until a domain is set), and an "
+                                         "\"Ask about this case\" panel scoped to the open case."))]
+for i, (t, dsc) in enumerate(feats):
+    col, row = i % 2, i // 2
+    x, y = Inches(0.7 + col * 6.1), Inches(1.9 + row * 2.4)
+    box(s, x, y, Inches(5.85), Inches(2.15))
+    bar = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, x, y + Inches(0.3), Inches(0.08), Inches(1.55))
+    bar.fill.solid()
+    bar.fill.fore_color.rgb = TEAL
+    bar.line.fill.background()
+    text(s, x + Inches(0.35), y + Inches(0.3), Inches(5.2), Inches(0.45), t, 19, INK, True)
+    text(s, x + Inches(0.35), y + Inches(0.85), Inches(5.2), Inches(1.2), dsc, 13, MUTED)
+footer(s, 9)
+
 # ── 9. engineering choices ──────────────────────────────────────────────────────────────────────────
 s = prs.slides.add_slide(BLANK)
 header(s, "Every optimisation was measured before it shipped", "Engineering")
@@ -327,7 +350,7 @@ for r, row in enumerate(rows):
         cell.fill.solid()
         cell.fill.fore_color.rgb = TEAL if r == 0 else (WHITE if r % 2 else SOFT)
         cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-footer(s, 9)
+footer(s, 10)
 
 # ── 10. demo ────────────────────────────────────────────────────────────────────────────────────────
 s = prs.slides.add_slide(BLANK)
@@ -336,7 +359,7 @@ demo = [("1", "Submit a case", "Five documents uploaded; the pipeline lights up 
         ("2", "Read the decision", "Rejected: CPT 17000 excluded (cosmetic), cited to the policy page; evidence boxes on the claim."),
         ("3", "Human in the loop", "A $18,900 escalation: reviewer requests an override, senior approves, audit chain verifies."),
         ("4", "Ask the assistant", "Coverage with citations, a follow-up from memory, then a blocked request for the audit trail."),
-        ("5", "Prove it", "Insights scorecard and calibration; red-team and quality-gate results; AWS cost ≈ $1/month idle.")]
+        ("5", "Prove it", "Insights scorecard and calibration; red-team and quality-gate results; AWS cost ≈ $1.25/month idle.")]
 for i, (n, t, dsc) in enumerate(demo):
     y = Inches(1.85 + i * 0.95)
     c = s.shapes.add_shape(MSO_SHAPE.OVAL, Inches(0.7), y, Inches(0.6), Inches(0.6))
@@ -353,7 +376,7 @@ box(s, Inches(0.7), Inches(6.55), Inches(11.9), Inches(0.42), MINT, None)
 text(s, Inches(0.9), Inches(6.6), Inches(11.5), Inches(0.35),
      "Live: d3064azeabhrfe.cloudfront.net   ·   Code, evaluation report and design decisions: in the GitHub repository", 13, DEEP,
      True)
-footer(s, 10)
+footer(s, 11)
 
 prs.save(OUT)
 print(f"wrote {OUT} ({len(prs.slides)} slides)")
