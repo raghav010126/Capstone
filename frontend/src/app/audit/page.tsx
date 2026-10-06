@@ -93,7 +93,7 @@ export default function AuditPage() {
               <span className={cn("rounded-md px-2 py-0.5 text-xs font-medium", TONE[e.action] ?? "bg-muted text-foreground")}>{e.action.replace(/_/g, " ")}</span>
               <span className="text-sm">{e.actor}</span>
               {e.case_id && (
-                <Link href={`/cases/${e.case_id}`} className="font-mono text-xs text-info hover:underline">
+                <Link href={`/cases/view?id=${e.case_id}`} className="font-mono text-xs text-info hover:underline">
                   {e.case_id}
                 </Link>
               )}

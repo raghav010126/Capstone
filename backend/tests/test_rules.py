@@ -200,3 +200,49 @@ def test_tamper_needs_two_high_ratings():
                              expired_marking=False, photo_present=True, assessment="")
     assert confirmed_tamper(v("high"), v("high"))
     assert not confirmed_tamper(v("medium"), v("high")) and not confirmed_tamper(v("medium"), v("medium"))
+
+
+# ── multilingual ─────────────────────────────────────────────────────────────────────────────────────
+def _lines(*texts):
+    return [OcrLine(id=i, text=t, box=(0, 0, 1, 1), score=0.99) for i, t in enumerate(texts)]
+
+
+def test_language_detection():
+    from medishield.agents.classifier import detect_language
+    assert detect_language(_lines("PRESCRIPTION", "Rx Date: 12/17/2025", "Take 1 tablet daily")) == "en"
+    assert detect_language(_lines("RECETA MÉDICA", "Paciente: Ana Ruiz", "Fecha de nacimiento: 03/11/1980", "Número de póliza")) == "es"
+    assert detect_language(_lines("चिकित्सा पर्ची (प्रिस्क्रिप्शन)", "रोगी का नाम:", "जन्म तिथि:", "पॉलिसी संख्या:")) == "hi"
+    assert detect_language(_lines("INSURANCE CARD", "Member of the plan", "de la")) == "en"      # stray words are not enough
+
+
+def test_multilingual_keywords_classify_without_a_model():
+    from medishield.agents.classifier import keyword_vote
+    assert keyword_vote(_lines("RECETA MÉDICA", "Medicamentos:", "Firma del médico"), 1000)[0] == DocType.PRESCRIPTION
+    assert keyword_vote(_lines("DOCUMENTO DE IDENTIDAD", "Nombre completo"), 1000)[0] == DocType.ID_DOCUMENT
+    assert keyword_vote(_lines("पहचान पत्र", "पूरा नाम"), 1000)[0] == DocType.ID_DOCUMENT
+    assert keyword_vote(_lines("चिकित्सा पर्ची (प्रिस्क्रिप्शन)", "दवाइयाँ:"), 1000)[0] == DocType.PRESCRIPTION
+
+
+def test_devanagari_second_pass_is_only_adopted_when_it_finds_devanagari(monkeypatch, tmp_path):
+    from medishield.ocr import engine
+
+    class Res:
+        def __init__(self, txts, score):
+            self.txts, self.scores = txts, [score] * len(txts)
+            self.boxes = [[[0, 0], [9, 0], [9, 9], [0, 9]]] * len(txts)
+
+    page = tmp_path / "p.png"
+    page.write_bytes(b"x")
+    monkeypatch.setenv("MEDISHIELD_CACHE", str(tmp_path / "cache"))
+    from medishield.config import get_settings
+    get_settings.cache_clear()
+    calls = []
+    english_blurry = {"default": Res(["Prescription", "Jessica"], 0.80), "devanagari": Res(["Prescrlption", "Jessica"], 0.99)}
+    monkeypatch.setattr(engine, "_engine", lambda lang="default": (lambda p: calls.append(lang) or english_blurry[lang]))
+    assert [ln.text for ln in engine.run_ocr(page)] == ["Prescription", "Jessica"]       # English stays on the default reading
+    assert calls == ["default", "devanagari"]
+    page.write_bytes(b"y")
+    hindi = {"default": Res(["T H", "Jessica"], 0.85), "devanagari": Res(["चिकित्सा पर्ची", "Jessica"], 0.98)}
+    monkeypatch.setattr(engine, "_engine", lambda lang="default": (lambda p: hindi[lang]))
+    assert engine.run_ocr(page)[0].text == "चिकित्सा पर्ची"
+    get_settings.cache_clear()

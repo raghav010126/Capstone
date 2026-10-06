@@ -1,0 +1,317 @@
+{
+ "split": "dev",
+ "dataset": "multilingual",
+ "timestamp": "2026-10-05T16:02:28",
+ "classification": {
+  "accuracy": 1.0,
+  "n": 40,
+  "wrong": []
+ },
+ "extraction": {
+  "rubric_claim_completeness": 1.0,
+  "rubric_n": 72,
+  "all_fields": 0.9935,
+  "per_type": {
+   "CLAIM_FORM": 1.0,
+   "PRESCRIPTION": 1.0,
+   "ID_DOCUMENT": 1.0,
+   "DISCHARGE_SUMMARY": 0.9643
+  },
+  "per_field": {
+   "CLAIM_FORM.attending_physician": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.billing_provider": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.claim_number": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.cpt_codes": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.icd_codes": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.line_charges": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.patient_dob": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.patient_name": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.policy_number": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.provider_npi": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.service_date": [
+    1.0,
+    12
+   ],
+   "CLAIM_FORM.total_charge": [
+    1.0,
+    12
+   ],
+   "DISCHARGE_SUMMARY.admit_date": [
+    1.0,
+    8
+   ],
+   "DISCHARGE_SUMMARY.attending_physician": [
+    1.0,
+    8
+   ],
+   "DISCHARGE_SUMMARY.discharge_date": [
+    1.0,
+    8
+   ],
+   "DISCHARGE_SUMMARY.facility": [
+    1.0,
+    8
+   ],
+   "DISCHARGE_SUMMARY.patient_dob": [
+    0.75,
+    8
+   ],
+   "DISCHARGE_SUMMARY.patient_name": [
+    1.0,
+    8
+   ],
+   "DISCHARGE_SUMMARY.primary_icd": [
+    1.0,
+    8
+   ],
+   "ID_DOCUMENT.dob": [
+    1.0,
+    10
+   ],
+   "ID_DOCUMENT.expiry_date": [
+    1.0,
+    10
+   ],
+   "ID_DOCUMENT.name_on_id": [
+    1.0,
+    10
+   ],
+   "ID_DOCUMENT.policy_number": [
+    1.0,
+    10
+   ],
+   "PRESCRIPTION.dea_number": [
+    1.0,
+    8
+   ],
+   "PRESCRIPTION.drugs": [
+    1.0,
+    10
+   ],
+   "PRESCRIPTION.patient_dob": [
+    1.0,
+    10
+   ],
+   "PRESCRIPTION.patient_name": [
+    1.0,
+    10
+   ],
+   "PRESCRIPTION.prescriber": [
+    1.0,
+    10
+   ],
+   "PRESCRIPTION.prescriber_npi": [
+    1.0,
+    10
+   ],
+   "PRESCRIPTION.rx_date": [
+    1.0,
+    10
+   ]
+  },
+  "misses": [
+   "dc_PT_99733_hi.patient_dob: gt='02/28/1963' got='28/02/1963'",
+   "dc_PT_69470_hi.patient_dob: gt='02/25/1976' got='25/02/1976'"
+  ]
+ },
+ "retrieval": {
+  "recall@3": 1.0,
+  "mrr": 1.0,
+  "queries": 28,
+  "misses": []
+ },
+ "decision": {
+  "accuracy_all": 1.0,
+  "n_all": 40,
+  "accuracy_visible": 1.0,
+  "n_visible": 40,
+  "by_type": {
+   "CLAIM_FORM": 1.0,
+   "PRESCRIPTION": 1.0,
+   "ID_DOCUMENT": 1.0,
+   "DISCHARGE_SUMMARY": 1.0
+  },
+  "confusion": {
+   "APPROVE->APPROVE": 34,
+   "REJECT->REJECT": 6
+  },
+  "wrong": []
+ },
+ "cases": {
+  "accuracy": 1.0,
+  "n": 14,
+  "wrong": []
+ },
+ "fraud": {
+  "detected": {},
+  "false_positive_docs": [
+   "claim_PT_99733_es_uncovered score=0.7"
+  ]
+ },
+ "edge_cases": {
+  "expired_id": "2/2",
+  "missing_fields": "2/2",
+  "uncovered_procedure": "2/2"
+ },
+ "ops": {
+  "cases": 14,
+  "docs": 40,
+  "case_latency_s": {
+   "p50": 13.3,
+   "p95": 27.6,
+   "max": 27.599235541012604
+  },
+  "cost_usd_new_calls": 0.3383,
+  "cold_cost_usd": 1.852,
+  "cold_cost_per_case_usd": 0.1323,
+  "cold_cost_per_doc_usd": 0.0463,
+  "llm_calls": 136,
+  "cache_hits": 72,
+  "retries_by_agent": {
+   "extractor": 22,
+   "classifier": 15
+  },
+  "cold_cost_by_agent": {
+   "preprocess": 0.0,
+   "classifier": 0.2246,
+   "extractor": 0.8151,
+   "claims": 0.0,
+   "policy": 0.4268,
+   "kyc_visual": 0.0268,
+   "fraud": 0.2808,
+   "justify": 0.0779
+  },
+  "mean_grounding_rate": 0.6844,
+  "mean_support_rate": 0.8196
+ },
+ "by_language": {
+  "es": {
+   "documents": 20,
+   "classification": 1.0,
+   "extraction_all_fields": 1.0,
+   "extraction_misses": [],
+   "decision": 1.0,
+   "mean_classifier_confidence": 0.98
+  },
+  "hi": {
+   "documents": 20,
+   "classification": 1.0,
+   "extraction_all_fields": 0.987,
+   "extraction_misses": [
+    "dc_PT_99733_hi.patient_dob: gt='02/28/1963' got='28/02/1963'",
+    "dc_PT_69470_hi.patient_dob: gt='02/25/1976' got='25/02/1976'"
+   ],
+   "decision": 1.0,
+   "mean_classifier_confidence": 0.77
+  }
+ },
+ "calibration": {
+  "all": {
+   "n": 40,
+   "accuracy": 1.0,
+   "raw": {
+    "ece": 0.0814,
+    "brier": 0.0083,
+    "bins": [
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 5,
+      "mean_conf": 0.828,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 35,
+      "mean_conf": 0.9315,
+      "accuracy": 1.0
+     }
+    ]
+   },
+   "calibrated": {
+    "ece": 0.0313,
+    "brier": 0.001,
+    "bins": [
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 40,
+      "mean_conf": 0.9687,
+      "accuracy": 1.0
+     }
+    ]
+   }
+  },
+  "visible": {
+   "n": 40,
+   "accuracy": 1.0,
+   "raw": {
+    "ece": 0.0814,
+    "brier": 0.0083,
+    "bins": [
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 5,
+      "mean_conf": 0.828,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 35,
+      "mean_conf": 0.9315,
+      "accuracy": 1.0
+     }
+    ]
+   },
+   "calibrated": {
+    "ece": 0.0313,
+    "brier": 0.001,
+    "bins": [
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 40,
+      "mean_conf": 0.9687,
+      "accuracy": 1.0
+     }
+    ]
+   }
+  },
+  "fitted_on_this_split": false
+ },
+ "spend_this_run_usd": 1.0212,
+ "graph_seconds": 190.5
+}

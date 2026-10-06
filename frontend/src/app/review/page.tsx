@@ -31,7 +31,7 @@ function Approval({ c }: { c: CaseSummary }) {
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-escalate/40 bg-escalate-soft p-3">
       <UserCheck className="size-5 text-escalate" />
       <div className="min-w-0 flex-1 text-sm">
-        <Link href={`/cases/${c.id}`} className="font-mono font-medium hover:underline">
+        <Link href={`/cases/view?id=${c.id}`} className="font-mono font-medium hover:underline">
           {c.id}
         </Link>{" "}
         · {money(o.amount)}
@@ -92,7 +92,7 @@ export default function ReviewPage() {
             {rows.map((c) => {
               const s = sla(c)
               return (
-                <TableRow key={c.id} className="cursor-pointer" onClick={() => router.push(`/cases/${c.id}`)}>
+                <TableRow key={c.id} className="cursor-pointer" onClick={() => router.push(`/cases/view?id=${c.id}`)}>
                   <TableCell>
                     <span className="font-mono text-sm font-medium">{c.id}</span>
                     {c.pending_override && <span className="ml-2 rounded bg-escalate-soft px-1.5 py-0.5 text-[10px] font-medium text-escalate">approval pending</span>}
@@ -112,7 +112,7 @@ export default function ReviewPage() {
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">{when(c.created_at)}</TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/cases/${c.id}`} onClick={(e) => e.stopPropagation()} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                    <Link href={`/cases/view?id=${c.id}`} onClick={(e) => e.stopPropagation()} className={buttonVariants({ size: "sm", variant: "outline" })}>
                       Review
                     </Link>
                   </TableCell>

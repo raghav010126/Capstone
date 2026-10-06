@@ -9,7 +9,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+_HERE = Path(__file__).resolve()
+REPO_ROOT = _HERE.parents[3] if len(_HERE.parents) > 3 else _HERE.parents[1]   # repo checkout, or /app in the image
 DEV_JWT_SECRET = "dev-only-secret-change-me-0123456789abcdef"
 
 
@@ -52,15 +53,27 @@ class Settings:
     # rate limits (per client, per minute)
     upload_rate_per_min: int = 10
     login_rate_per_min: int = 10
+    chat_rate_per_min: int = 12
     # review workflow
     four_eyes_amount: float = 10_000.0
     sla_hours: float = 24.0
     # storage / queue
+    db_backend: str = "sql"                             # "sql" (SQLite / Postgres) | "dynamodb"
+    dynamo_table: str = "medishield"
+    text_extract: bool = False                          # with vision_mode=auto: also try text-only extraction first (measured: -4% cost, -4 pts accuracy)
+    vision_mode: str = "always"                         # "always": page images go to the model; "auto": OCR first, vision only when needed
+    dynamo_endpoint_url: str = ""                       # tests / local emulators only
+    aws_region: str = "us-east-1"
     storage_backend: str = "local"                      # "local" | "s3"
     s3_bucket: str = ""
     s3_endpoint_url: str = ""
     s3_region: str = "us-east-1"
     queue_immediate: bool = False                       # run tasks inline (tests)
+    queue_backend: str = "huey"                         # "huey" (SQLite / Redis) | "sqs" (AWS Lambda worker)
+    sqs_queue_url: str = ""
+    pipeline_runtime_arn: str = ""                      # AgentCore runtime that processes cases (MEDISHIELD_QUEUE=agentcore)
+    assistant_runtime_arn: str = ""                     # AgentCore runtime that answers chat
+    api_base_path: str = ""                             # "/api" when CloudFront forwards /api/* to the Lambda
     redis_url: str = ""
 
     @property
@@ -123,12 +136,24 @@ def get_settings() -> Settings:
         max_upload_bytes=int(_env("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))),
         upload_rate_per_min=int(_env("UPLOAD_RATE_PER_MIN", "10")),
         login_rate_per_min=int(_env("LOGIN_RATE_PER_MIN", "10")),
+        chat_rate_per_min=int(_env("CHAT_RATE_PER_MIN", "12")),
         four_eyes_amount=float(_env("FOUR_EYES_AMOUNT", "10000")),
         sla_hours=float(_env("SLA_HOURS", "24")),
+        db_backend=_env("MEDISHIELD_DB", "sql"),
+        dynamo_table=_env("DYNAMO_TABLE", "medishield"),
+        vision_mode=_env("MEDISHIELD_VISION", "always").lower(),
+        text_extract=_flag("MEDISHIELD_TEXT_EXTRACT", False),
+        dynamo_endpoint_url=_env("DYNAMO_ENDPOINT_URL", ""),
+        aws_region=_env("AWS_REGION", _env("AWS_DEFAULT_REGION", "us-east-1")),
         storage_backend=_env("STORAGE_BACKEND", "local"),
         s3_bucket=_env("S3_BUCKET", ""),
         s3_endpoint_url=_env("S3_ENDPOINT_URL", ""),
         s3_region=_env("S3_REGION", "us-east-1"),
         queue_immediate=_flag("MEDISHIELD_QUEUE_IMMEDIATE", False),
+        queue_backend=_env("MEDISHIELD_QUEUE", "huey").lower(),
+        sqs_queue_url=_env("SQS_QUEUE_URL", ""),
+        pipeline_runtime_arn=_env("PIPELINE_RUNTIME_ARN", ""),
+        assistant_runtime_arn=_env("ASSISTANT_RUNTIME_ARN", ""),
+        api_base_path=_env("API_BASE_PATH", ""),
         redis_url=_env("REDIS_URL", ""),
     )

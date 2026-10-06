@@ -196,3 +196,21 @@ def ops(rows: list[dict], cases: list[dict], runs: list[dict]) -> dict:
             "retries_by_agent": dict(retries), "cold_cost_by_agent": {k: round(v, 4) for k, v in by_agent.items()},
             "mean_grounding_rate": round(statistics.mean(grounding), 4) if grounding else None,
             "mean_support_rate": round(statistics.mean(support), 4) if support else None}
+
+
+def by_language(rows: list[dict], fields_gt: dict) -> dict:
+    """Per-language results for a multilingual dataset (documents are named ``..._es`` / ``..._hi``); {} otherwise."""
+    import re
+
+    lang_of = lambda r: (m.group(1) if (m := re.search(r"_(es|hi)(?:_|$)", r["doc_id"])) else None)
+    langs = sorted({lang_of(r) for r in rows} - {None})
+    out = {}
+    for lang in langs:
+        sub = [r for r in rows if lang_of(r) == lang]
+        ext = score_extraction(sub, fields_gt)
+        out[lang] = {"documents": len(sub),
+                     "classification": round(sum(r["pred_type"] == r["true_type"] for r in sub) / len(sub), 4),
+                     "extraction_all_fields": ext["all_fields"], "extraction_misses": ext["misses"][:12],
+                     "decision": round(sum(r["pred_decision"] == r["expected_decision"] for r in sub) / len(sub), 4),
+                     "mean_classifier_confidence": round(sum(r["cls_confidence"] for r in sub) / len(sub), 3)}
+    return out

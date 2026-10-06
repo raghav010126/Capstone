@@ -1,0 +1,435 @@
+{
+ "split": "dev",
+ "dataset": "official",
+ "timestamp": "2026-10-05T15:39:02",
+ "classification": {
+  "accuracy": 1.0,
+  "n": 77,
+  "wrong": []
+ },
+ "extraction": {
+  "rubric_claim_completeness": 0.977,
+  "rubric_n": 87,
+  "all_fields": 0.9801,
+  "per_type": {
+   "ID_DOCUMENT": 0.9302,
+   "CLAIM_FORM": 0.9829,
+   "DISCHARGE_SUMMARY": 1.0,
+   "PRESCRIPTION": 1.0,
+   "POLICY_AMENDMENT": 0.9467
+  },
+  "per_field": {
+   "CLAIM_FORM.attending_physician": [
+    1.0,
+    13
+   ],
+   "CLAIM_FORM.billing_provider": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.claim_number": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.cpt_codes": [
+    0.8667,
+    15
+   ],
+   "CLAIM_FORM.icd_codes": [
+    1.0,
+    14
+   ],
+   "CLAIM_FORM.line_charges": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.patient_dob": [
+    0.9333,
+    15
+   ],
+   "CLAIM_FORM.patient_name": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.policy_number": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.provider_npi": [
+    1.0,
+    13
+   ],
+   "CLAIM_FORM.service_date": [
+    1.0,
+    15
+   ],
+   "CLAIM_FORM.total_charge": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.admit_date": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.attending_physician": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.discharge_date": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.facility": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.patient_dob": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.patient_name": [
+    1.0,
+    15
+   ],
+   "DISCHARGE_SUMMARY.primary_icd": [
+    1.0,
+    15
+   ],
+   "ID_DOCUMENT.dob": [
+    1.0,
+    10
+   ],
+   "ID_DOCUMENT.expiry_date": [
+    0.9167,
+    12
+   ],
+   "ID_DOCUMENT.name_on_id": [
+    1.0,
+    15
+   ],
+   "ID_DOCUMENT.policy_number": [
+    0.6667,
+    6
+   ],
+   "POLICY_AMENDMENT.amendment_type": [
+    0.8667,
+    15
+   ],
+   "POLICY_AMENDMENT.dob": [
+    0.9333,
+    15
+   ],
+   "POLICY_AMENDMENT.effective_date": [
+    0.9333,
+    15
+   ],
+   "POLICY_AMENDMENT.policy_number": [
+    1.0,
+    15
+   ],
+   "POLICY_AMENDMENT.policyholder": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.dea_number": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.drugs": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.patient_dob": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.patient_name": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.prescriber": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.prescriber_npi": [
+    1.0,
+    15
+   ],
+   "PRESCRIPTION.rx_date": [
+    1.0,
+    15
+   ]
+  },
+  "misses": [
+   "claim_PT_99733.cpt_codes: gt=['80053', '90837', '27447', '99291'] got=['80053', '90837', '27447', '9291']",
+   "amend_PT_62350.dob: gt='01/26/1997' got='01/26|1997'",
+   "amend_PT_62350.amendment_type: gt='Rider Addition - Critical Illness' got='Rider Addition - Critical IlIness'",
+   "claim_PT_82132.patient_dob: gt='11/14/1951' got=None",
+   "id_PT_15075.expiry_date: gt='2025-05-04' got=None",
+   "amend_PT_15075.amendment_type: gt='Add Dependent - Spouse' got='Add Dependent -Spouse'",
+   "claim_PT_81810.cpt_codes: gt=['90837', '27447', '71250', '99291'] got=['90837', '27447', '71250', '9291']",
+   "id_PT_67125.policy_number: gt='MED-GLD-1327691' got=None",
+   "amend_PT_24993.effective_date: gt='2025-01-08' got='2025-08-01'",
+   "id_PT_99687.policy_number: gt='MED-GLD-6218367' got=None"
+  ]
+ },
+ "retrieval": {
+  "recall@3": 1.0,
+  "mrr": 0.9878,
+  "queries": 41,
+  "misses": []
+ },
+ "decision": {
+  "accuracy_all": 0.9221,
+  "n_all": 77,
+  "accuracy_visible": 0.9595,
+  "n_visible": 74,
+  "by_type": {
+   "ID_DOCUMENT": 0.8667,
+   "CLAIM_FORM": 0.8,
+   "DISCHARGE_SUMMARY": 1.0,
+   "PRESCRIPTION": 1.0,
+   "POLICY_AMENDMENT": 0.9333,
+   "UNKNOWN": 1.0
+  },
+  "confusion": {
+   "APPROVE->APPROVE": 59,
+   "APPROVE->ESCALATE": 1,
+   "APPROVE->REJECT": 2,
+   "ESCALATE->APPROVE": 1,
+   "ESCALATE->ESCALATE": 4,
+   "REJECT->APPROVE": 2,
+   "REJECT->REJECT": 8
+  },
+  "wrong": [
+   "claim_PT_99733: expected APPROVE got REJECT (R2_hard_failure) - claim standard: cpt: invalid code '9291'; coverage conditional: 4.1 Excluded CPT Code Ranges (Machine-Readable) p.7: Critical care is covered: Section 3 (p.6) includes the intensive care unit (ICU) and attending physicia",
+   "amend_PT_62350: expected APPROVE got ESCALATE (R3_fraud_or_low_confidence) - KYC warnings: dob_mismatch; fraud signal llm:rider_effective_on_service_date (w=0.2): The Critical Illness rider addition is effective 2025-11-15, the same day as the admission and service date in claim_PT_62350 and disc",
+   "claim_PT_69470: expected ESCALATE got APPROVE (R4_default) [label not visible] - all checks passed",
+   "id_PT_57795: expected REJECT got APPROVE (R4_default) [label not visible] - all checks passed",
+   "claim_PT_81810: expected APPROVE got REJECT (R2_hard_failure) - claim standard: cpt: invalid code '9291'; coverage conditional: 3. Inclusions (Covered Services) p.6: Section 3 covers inpatient 'intensive care unit (ICU)... and attending physician fees' and emergency 'stabilization', ",
+   "id_PT_74454: expected REJECT got APPROVE (R4_default) [label not visible] - all checks passed"
+  ]
+ },
+ "cases": {
+  "accuracy": 0.7647,
+  "n": 17,
+  "wrong": [
+   "C_004: expected ESCALATE got APPROVE",
+   "C_013: expected REJECT got APPROVE",
+   "C_019: expected APPROVE got REJECT",
+   "C_029: expected REJECT got APPROVE"
+  ]
+ },
+ "fraud": {
+  "detected": {
+   "amount_under_10k (not visible)": "0/1",
+   "date_conflict": "1/1",
+   "proc_diag_mismatch": "1/1"
+  },
+  "false_positive_docs": []
+ },
+ "edge_cases": {
+  "expired_id": "3/3",
+  "expiring_soon_id": "2/2",
+  "missing_fields": "3/3",
+  "tampered_id (not visible)": "0/2",
+  "uncovered_procedure": "2/2",
+  "unknown_document": "2/2"
+ },
+ "ops": {
+  "cases": 17,
+  "docs": 77,
+  "case_latency_s": {
+   "p50": 16.3,
+   "p95": 38.0,
+   "max": 37.98918541701278
+  },
+  "cost_usd_new_calls": 0.5357,
+  "cold_cost_usd": 1.9177,
+  "cold_cost_per_case_usd": 0.1128,
+  "cold_cost_per_doc_usd": 0.0249,
+  "llm_calls": 147,
+  "cache_hits": 115,
+  "retries_by_agent": {
+   "extractor": 2,
+   "classifier": 1
+  },
+  "cold_cost_by_agent": {
+   "preprocess": 0.0,
+   "classifier": 0.0204,
+   "extractor": 0.7599,
+   "kyc_visual": 0.0,
+   "claims": 0.0,
+   "policy": 0.6075,
+   "kyc": 0.0,
+   "fraud": 0.4069,
+   "justify": 0.1229
+  },
+  "mean_grounding_rate": 0.9812,
+  "mean_support_rate": 0.9865
+ },
+ "by_language": {},
+ "calibration": {
+  "all": {
+   "n": 77,
+   "accuracy": 0.9221,
+   "raw": {
+    "ece": 0.1242,
+    "brier": 0.0831,
+    "bins": [
+     {
+      "lo": 0.2,
+      "hi": 0.3,
+      "n": 1,
+      "mean_conf": 0.3,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.5,
+      "hi": 0.6,
+      "n": 1,
+      "mean_conf": 0.5,
+      "accuracy": 0.0
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 3,
+      "mean_conf": 0.752,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 19,
+      "mean_conf": 0.8145,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 53,
+      "mean_conf": 0.983,
+      "accuracy": 0.9057
+     }
+    ]
+   },
+   "calibrated": {
+    "ece": 0.0886,
+    "brier": 0.0756,
+    "bins": [
+     {
+      "lo": 0.5,
+      "hi": 0.6,
+      "n": 2,
+      "mean_conf": 0.5445,
+      "accuracy": 0.5
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 1,
+      "mean_conf": 0.7991,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 19,
+      "mean_conf": 0.8601,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 55,
+      "mean_conf": 0.9796,
+      "accuracy": 0.9091
+     }
+    ]
+   }
+  },
+  "visible": {
+   "n": 74,
+   "accuracy": 0.9595,
+   "raw": {
+    "ece": 0.0905,
+    "brier": 0.0493,
+    "bins": [
+     {
+      "lo": 0.2,
+      "hi": 0.3,
+      "n": 1,
+      "mean_conf": 0.3,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.5,
+      "hi": 0.6,
+      "n": 1,
+      "mean_conf": 0.5,
+      "accuracy": 0.0
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 3,
+      "mean_conf": 0.752,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 19,
+      "mean_conf": 0.8145,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 50,
+      "mean_conf": 0.9845,
+      "accuracy": 0.96
+     }
+    ]
+   },
+   "calibrated": {
+    "ece": 0.0536,
+    "brier": 0.0418,
+    "bins": [
+     {
+      "lo": 0.5,
+      "hi": 0.6,
+      "n": 2,
+      "mean_conf": 0.5445,
+      "accuracy": 0.5
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 1,
+      "mean_conf": 0.7991,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 19,
+      "mean_conf": 0.8601,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 52,
+      "mean_conf": 0.9811,
+      "accuracy": 0.9615
+     }
+    ]
+   }
+  },
+  "fitted_on_this_split": true
+ },
+ "spend_this_run_usd": 1.101,
+ "graph_seconds": 284.8
+}

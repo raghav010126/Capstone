@@ -13,14 +13,13 @@ from pathlib import Path
 
 from medishield.config import get_settings
 from medishield.db import audit
-from medishield.db.models import PolicyDoc
-from medishield.db.session import session_scope
+from medishield.db.repo import repo_scope
 from medishield.rag import ingest, retrieve
 
 log = logging.getLogger(__name__)
 
 
-def policy_path(policy: PolicyDoc) -> Path:
+def policy_path(policy) -> Path:
     return get_settings().policy_upload_dir / f"{policy.plan}-{policy.sha256[:12]}.pdf"
 
 
@@ -31,10 +30,8 @@ def save_upload(plan: str, filename: str, data: bytes, uploader: str) -> int:
     if not data.startswith(b"%PDF-"):
         raise UploadError("not a PDF", 415)
     digest = hashlib.sha256(data).hexdigest()
-    with session_scope() as db:
-        p = PolicyDoc(plan=plan, filename=filename[:255], sha256=digest, uploaded_by=uploader, status="INGESTING")
-        db.add(p)
-        db.flush()
+    with repo_scope() as db:
+        p = db.add_policy(plan, filename, digest, uploader)
         path = policy_path(p)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
@@ -43,8 +40,8 @@ def save_upload(plan: str, filename: str, data: bytes, uploader: str) -> int:
 
 
 def ingest_policy(policy_id: int) -> None:
-    with session_scope() as db:
-        p = db.get(PolicyDoc, policy_id)
+    with repo_scope() as db:
+        p = db.get_policy(policy_id)
         path, plan = policy_path(p), p.plan
     try:
         idx = ingest.load_or_ingest(path)
@@ -53,26 +50,25 @@ def ingest_policy(policy_id: int) -> None:
             c.plan = plan
         idx.ranges = [replace(r, plan=plan) for r in idx.ranges]
         retrieve.get_store.cache_clear()           # next claim rebuilds the store with the new policy
-        with session_scope() as db:
-            p = db.get(PolicyDoc, policy_id)
+        with repo_scope() as db:
+            p = db.get_policy(policy_id)
             p.status, p.product_code, p.chunk_count = "READY", idx.product_code, len(idx.chunks)
             p.ranges = [r.to_dict() for r in idx.ranges]
+            db.save_policy(p)
             audit.append(db, "system", "policy_ingested", None,
                          {"plan": plan, "chunks": len(idx.chunks), "exclusion_rows": len(idx.ranges)})
     except Exception as e:
         log.exception("policy ingestion failed")
-        with session_scope() as db:
-            p = db.get(PolicyDoc, policy_id)
+        with repo_scope() as db:
+            p = db.get_policy(policy_id)
             p.status, p.error = "FAILED", f"{type(e).__name__}: {str(e)[:300]}"
+            db.save_policy(p)
 
 
 def uploaded_policy_paths() -> list[Path]:
     """READY uploads, newest per plan (an upload supersedes the bundled policy for the same plan)."""
-    from sqlalchemy import select
-
-    with session_scope() as db:
-        rows = db.execute(select(PolicyDoc).where(PolicyDoc.status == "READY").order_by(PolicyDoc.id)).scalars().all()
-        latest = {p.plan: policy_path(p) for p in rows}
+    with repo_scope() as db:
+        latest = {p.plan: policy_path(p) for p in db.ready_policies()}
     return list(latest.values())
 
 

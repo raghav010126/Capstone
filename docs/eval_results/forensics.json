@@ -1,0 +1,41 @@
+{
+ "samples_per_group": 24,
+ "typography": {
+  "retyped_date_png": {
+   "caught": 19,
+   "of": 24
+  },
+  "retyped_date_jpeg": {
+   "caught": 18,
+   "of": 24
+  },
+  "clean_png_flagged": {
+   "flagged": 0,
+   "of": 24
+  },
+  "clean_jpeg_flagged": {
+   "flagged": 3,
+   "of": 48
+  }
+ },
+ "ela": {
+  "spliced_region_caught": {
+   "caught": 9,
+   "of": 24
+  },
+  "retyped_date_caught": {
+   "caught": 2,
+   "of": 24
+  },
+  "clean_jpeg_flagged": {
+   "flagged": 8,
+   "of": 48
+  },
+  "verdict": "advisory only: detection is close to the false-alarm rate on flat synthetic documents"
+ },
+ "settings": {
+  "ela_z": 6.0,
+  "ela_min_blocks": 3,
+  "typography_tolerance": 0.12
+ }
+}

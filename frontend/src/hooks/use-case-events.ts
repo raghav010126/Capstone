@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { api, wsUrl, type EventOut } from "@/lib/api"
+import { api, API_URL, wsUrl, type EventOut } from "@/lib/api"
 
 export type LiveEvent = Pick<EventOut, "id" | "node" | "status" | "doc_id"> & { payload?: Record<string, unknown> }
 export type StreamState = "live" | "polling" | "done"
@@ -68,6 +68,7 @@ export function useCaseEvents(caseId: string | null, onDone?: (status: string) =
     let ws: WebSocket | null = null
     // Start on the next tick so React StrictMode's throw-away first mount never opens a socket.
     const connect = setTimeout(() => {
+      if (API_URL.startsWith("/")) return startPolling()          // behind CloudFront/Lambda there are no sockets: poll
       try {
         ws = new WebSocket(wsUrl(`/ws/cases/${caseId}`))
         ws.onmessage = (m) => {

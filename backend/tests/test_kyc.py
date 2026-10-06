@@ -6,7 +6,10 @@ from medishield.agents.context import CaseContext, DocView
 from medishield.records import Records
 from medishield.schemas import AgentRun, DocType, ExtractionResult
 from medishield.schemas.llm_outputs import KycVisualRead
+from PIL import Image
 
+PAGE = "/tmp/medishield-test-page.png"
+Image.new("RGB", (200, 120), "white").save(PAGE)                  # forensics reads the file; its content is irrelevant here
 MEMBER = {"member_id": "PT_1", "policy_number": "MED-GLD-1234567", "full_name": "Ann Lee", "dob": "1980-01-02",
           "status": "ACTIVE", "plan": "GOLD"}
 
@@ -15,10 +18,10 @@ MEMBER = {"member_id": "PT_1", "policy_number": "MED-GLD-1234567", "full_name": 
 def no_vision(monkeypatch):
     clean = KycVisualRead(tamper_indicators=[], layout_or_quality_issues=[], tamper_likelihood="none",
                           expired_marking=False, photo_present=True, assessment="ok")
-    monkeypatch.setattr(kyc, "_visual", lambda path, tag: (clean, [], AgentRun(agent="kyc_visual")))
+    monkeypatch.setattr(kyc, "_visual", lambda path, tag: (clean, [], AgentRun(agent="kyc_visual"), False))
 
 
-def run(expiry: str | None, dos: str = "2025-11-09", stamps=()):
+def run(expiry: str | None, dos: str = "2025-11-09", stamps=(), tmp_path=None):
     ext = ExtractionResult(doc_type=DocType.ID_DOCUMENT, fields=[], raw_text="", bounding_boxes=[],
                            grounding_rate=1, support_rate=1, confidence=0.95,
                            values={"name_on_id": "ANN LEE", "dob": "01/02/1980", "expiry_date": expiry,
@@ -26,7 +29,7 @@ def run(expiry: str | None, dos: str = "2025-11-09", stamps=()):
     ctx = CaseContext("C", [DocView("claim", DocType.CLAIM_FORM, {"service_date": dos, "patient_name": "Ann Lee",
                                                                      "patient_dob": "01/02/1980",
                                                                      "policy_number": "MED-GLD-1234567"}, 0.95)])
-    res, _ = kyc.verify_id("id", "unused.png", ext, ctx, Records([MEMBER], []))
+    res, _ = kyc.verify_id("id", PAGE, ext, ctx, Records([MEMBER], []))
     return res
 
 

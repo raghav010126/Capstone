@@ -18,6 +18,7 @@ from typing import Any
 
 from langgraph.types import Command
 
+from medishield import observability
 from medishield.config import get_settings
 from medishield.graph.build import build_graph
 from medishield.ocr.engine import file_sha256
@@ -75,7 +76,8 @@ def run_case_stream(case_id: str, paths: list[tuple[str, str | Path]], thread_id
     """Run to completion or to the human-review pause. Returns {values, paused, wall_ms}."""
     docs = [DocumentInput(doc_id=d, case_id=case_id, path=str(p), sha256=file_sha256(p)).model_dump()
             for d, p in paths]
-    config = {"configurable": {"thread_id": thread_id, "hitl": hitl, "forced_types": forced_types or {}}}
+    config = {"configurable": {"thread_id": thread_id, "hitl": hitl, "forced_types": forced_types or {}},
+              **observability.graph_config(case_id)}
     g = persistent_graph()
     t0 = time.perf_counter()
     for update in g.stream({"case_id": case_id, "documents": docs}, config, stream_mode="updates"):
@@ -86,6 +88,7 @@ def run_case_stream(case_id: str, paths: list[tuple[str, str | Path]], thread_id
                 for ev in payload.get("events", []):
                     on_event(ev)
     snap = g.get_state(config)
+    observability.flush()
     return {"values": dict(snap.values), "paused": "human_review" in (snap.next or ()),
             "wall_ms": (time.perf_counter() - t0) * 1000}
 

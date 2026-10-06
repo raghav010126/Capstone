@@ -9,7 +9,6 @@ dependencies = [
     "fpdf2>=2.8",
     "pydantic>=2.9",
     "pyyaml>=6.0",
-    "docling>=2.133.0",
     "rapidocr>=3.9.2",
     "onnxruntime>=1.30.0",
     "anthropic>=1.11.0",
@@ -31,10 +30,18 @@ dependencies = [
     "boto3>=1.43.108",
     "redis>=8.1.0",
     "langgraph-checkpoint-sqlite>=3.1.1",
+    "uharfbuzz>=0.56.2",
+    "fonttools>=4.66.1",
+    "mangum>=0.22.0",
+    "pypdfium2>=5.14.0",
+    "bedrock-agentcore>=1.24.0",
 ]
 
 [dependency-groups]
+# Docling (PDF policy parsing, pulls PyTorch) is only needed to ingest a new policy; the Lambda image leaves it out
+ingest = ["docling>=2.133.0"]
 dev = [
+    "botocore[crt]>=1.43.108",
     "moto>=5.2.3",
     "pytest>=8.3",
     "pytest-asyncio>=1.4.0",
@@ -45,6 +52,9 @@ dev = [
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
 
+[tool.uv]
+default-groups = ["dev", "ingest"]
+
 [tool.uv.build-backend]
 module-root = "backend/src"
 
@@ -54,6 +64,8 @@ pythonpath = ["backend/tests"]
 markers = ["integration: runs the real pipeline against cached model responses (needs data/official)"]
 
 [tool.ruff]
+# the instructors' generator scripts are vendored byte-for-byte unmodified; never lint-fix them
+extend-exclude = ["datagen/official"]
 line-length = 110
 target-version = "py312"
 
@@ -61,6 +73,10 @@ target-version = "py312"
 # DTZ: document dates (DOB, expiry, service date) are calendar dates without a timezone by nature.
 # UP046/UP047: the codebase keeps classic TypeVar generics for readability.
 extend-ignore = ["DTZ007", "DTZ005", "UP046", "UP047"]
+
+[tool.ruff.lint.per-file-ignores]
+# the data harness deliberately executes the vendored generator scripts and survives font failures
+"datagen/*.py" = ["S102", "BLE001"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["medishield.api.security.require", "fastapi.Depends", "fastapi.Query", "fastapi.File", "fastapi.Form", "fastapi.Header"]

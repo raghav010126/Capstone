@@ -9,17 +9,13 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
 from medishield import pipeline
 from medishield.api.security import Principal, redact
 from medishield.api.uploads import Page, UploadError, normalise
 from medishield.config import get_settings
 from medishield.db import audit
-from medishield.db.models import AgentRunRow, Case, CaseEvent, Document
-from medishield.db.session import session_scope
+from medishield.db.models import Case, Document
+from medishield.db.repo import Repo, repo_scope
 from medishield.fraud.rules import norm_claim_no
 from medishield.llm import BudgetExceeded
 from medishield.records import ProcessedClaim, get_records
@@ -33,7 +29,7 @@ def new_case_id() -> str:
     return "CASE-" + secrets.token_hex(4).upper()
 
 
-def display_status(c: Case) -> str:
+def display_status(c) -> str:
     if c.status in ("RECEIVED", "PROCESSING"):
         return "Processing"
     if c.status == "FAILED":
@@ -44,20 +40,19 @@ def display_status(c: Case) -> str:
     return {"APPROVE": "Approved", "REJECT": "Rejected", "ESCALATE": "Escalated"}.get(final or "", "Processing")
 
 
-def sla_due(c: Case) -> datetime:
+def sla_due(c) -> datetime:
     created = c.created_at if c.created_at.tzinfo else c.created_at.replace(tzinfo=UTC)
     return created + timedelta(hours=get_settings().sla_hours)
 
 
 # ── creation ─────────────────────────────────────────────────────────────────────────────────────────
-def create_case(db: Session, user: Principal, files: list[tuple[str, bytes]],
+def create_case(db: Repo, user: Principal, files: list[tuple[str, bytes]],
                 idempotency_key: str | None) -> tuple[Case, list[str], bool]:
     """Validate, store and register a case. Returns (case, warnings, created). Idempotent per
     (submitter, Idempotency-Key): a retried request returns the original case instead of a second one."""
     s = get_settings()
     if idempotency_key:
-        prior = db.execute(select(Case).where(Case.submitted_by == user.username,
-                                              Case.idempotency_key == idempotency_key)).scalar_one_or_none()
+        prior = db.find_case_by_idempotency(user.username, idempotency_key)
         if prior:
             return prior, [], False
     if not files:
@@ -88,34 +83,23 @@ def create_case(db: Session, user: Principal, files: list[tuple[str, bytes]],
         case.documents.append(Document(doc_id=pg.doc_id, position=i, filename=pg.filename[:255], storage_key=key,
                                        media_type=pg.media_type, size_bytes=len(pg.data), sha256=pg.sha256,
                                        page=pg.page))
-    db.add(case)
-    try:
-        db.flush()
-    except IntegrityError:                                     # lost an idempotency race
-        db.rollback()
-        prior = db.execute(select(Case).where(Case.submitted_by == user.username,
-                                              Case.idempotency_key == idempotency_key)).scalar_one()
-        return prior, [], False
+    case, created = db.add_case(case)
+    if not created:                                            # lost an idempotency race
+        return case, [], False
     audit.append(db, user.username, "case_created", case.id,
                  {"documents": [d.doc_id for d in case.documents], "sha256": [d.sha256[:16] for d in case.documents]})
     return case, warnings, True
 
 
 # ── events ───────────────────────────────────────────────────────────────────────────────────────────
-def event_row(case_id: str, ev: dict) -> CaseEvent:
-    extra = {k: v for k, v in ev.items() if k not in ("node", "status", "doc_id", "ts")}
-    return CaseEvent(case_id=case_id, node=str(ev.get("node", "")), status=str(ev.get("status", "")),
-                     doc_id=ev.get("doc_id"), payload=extra)
-
-
 def emit(case_id: str, ev: dict) -> None:
     """Record a progress event in its own short transaction (worker use)."""
-    with session_scope() as db:
-        db.add(event_row(case_id, ev))
+    with repo_scope() as db:
+        db.add_event(case_id, ev)
 
 
 # ── running the pipeline ─────────────────────────────────────────────────────────────────────────────
-def case_total(docs: list[Document]) -> float:
+def case_total(docs: list) -> float:
     seen, total = set(), 0.0
     for d in docs:
         if d.doc_type == DocType.CLAIM_FORM.value and d.extraction:
@@ -131,12 +115,14 @@ def rebuild_registry() -> int:
     """Re-create the processed-claims registry (duplicate detection) from stored extractions after a restart."""
     records = get_records()
     n = 0
-    with session_scope() as db:
-        rows = db.execute(select(Document, Case.created_at).join(Case, Case.id == Document.case_id)
-                          .where(Document.doc_type == DocType.CLAIM_FORM.value, Document.extraction.is_not(None),
-                                 Case.status.in_(("DECIDED", "IN_REVIEW", "FINALIZED")))
-                          .order_by(Case.created_at, Document.position)).all()
-        for d, _ in rows:
+    with repo_scope() as db:
+        done = sorted((c for c in db.all_cases() if c.status in ("DECIDED", "IN_REVIEW", "FINALIZED")), key=lambda c: c.created_at)
+        docs = []
+        for c in done:                                         # list views carry document stubs; the registry needs the extractions
+            full = db.get_case(c.id)
+            docs += [d for d in sorted(full.documents, key=lambda d: d.position)
+                     if d.doc_type == DocType.CLAIM_FORM.value and d.extraction]
+        for d in docs:
             v = d.extraction["values"]
             member, _how = records.find_member(policy=v.get("policy_number"), name=v.get("patient_name"),
                                                dob=v.get("patient_dob"))
@@ -150,8 +136,8 @@ def rebuild_registry() -> int:
 def process_case(case_id: str) -> None:
     """Worker entry point: run the graph for a stored case and persist the outcome."""
     storage = get_storage()
-    with session_scope() as db:
-        case = db.get(Case, case_id)
+    with repo_scope() as db:
+        case = db.get_case(case_id)
         if case is None:
             return
         case.status, case.error = "PROCESSING", None
@@ -159,9 +145,10 @@ def process_case(case_id: str) -> None:
         thread_id = case.thread_id
         paths = [(d.doc_id, storage.local_path(d.storage_key)) for d in case.documents]
         forced = {d.doc_id: d.forced_type for d in case.documents if d.forced_type}
+        db.save_case(case)
     get_records().unregister_case(case_id)
-    with session_scope() as db:                       # a re-run (e.g. after a reclassification) starts a fresh progress log
-        db.query(CaseEvent).filter(CaseEvent.case_id == case_id).delete()
+    with repo_scope() as db:                          # a re-run (e.g. after a reclassification) starts a fresh progress log
+        db.clear_events(case_id)
     emit(case_id, {"node": "queued", "status": "running"})
     try:
         out = pipeline.run_case_stream(case_id, paths, thread_id, lambda ev: emit(case_id, ev), forced)
@@ -172,19 +159,20 @@ def process_case(case_id: str) -> None:
         log.exception("case %s failed", case_id)
         _fail(case_id, f"{type(e).__name__}: {redact(str(e))[:300]}")
         return
-    with session_scope() as db:
-        persist_result(db, db.get(Case, case_id), out["values"], out["paused"], out["wall_ms"])
+    with repo_scope() as db:
+        persist_result(db, db.get_case(case_id), out["values"], out["paused"], out["wall_ms"])
 
 
 def _fail(case_id: str, message: str) -> None:
-    with session_scope() as db:
-        case = db.get(Case, case_id)
+    with repo_scope() as db:
+        case = db.get_case(case_id)
         case.status, case.error = "FAILED", message[:500]
+        db.save_case(case)
         audit.append(db, "system", "case_failed", case_id, {"error": message[:200]})
     emit(case_id, {"node": "failed", "status": "error", "error": message[:200]})
 
 
-def persist_result(db: Session, case: Case, values: dict[str, Any], paused: bool, wall_ms: float) -> None:
+def persist_result(db: Repo, case, values: dict[str, Any], paused: bool, wall_ms: float) -> None:
     dec = values["decision"]
     by_doc = {d["doc_id"]: d for d in dec["documents"]}
     for d in case.documents:
@@ -196,11 +184,7 @@ def persist_result(db: Session, case: Case, values: dict[str, Any], paused: bool
         dd = by_doc.get(d.doc_id)
         d.decision, d.decision_detail = (dd["decision"] if dd else None), dd
     runs = values.get("runs", [])
-    db.query(AgentRunRow).filter(AgentRunRow.case_id == case.id).delete()
-    for r in runs:
-        db.add(AgentRunRow(case_id=case.id, agent=r["agent"], model=r.get("model"), retried_with=r.get("retried_with"),
-                           input_tokens=r["input_tokens"], output_tokens=r["output_tokens"], cost_usd=r["cost_usd"],
-                           cold_cost_usd=r.get("cold_cost_usd", r["cost_usd"]), latency_ms=r["latency_ms"], llm_calls=r["llm_calls"], cache_hits=r["cache_hits"]))
+    db.replace_agent_runs(case.id, runs)
     fraud = values.get("fraud") or {}
     case.decision, case.fraud = dec, fraud
     case.ai_decision, case.ai_confidence = dec["decision"], dec["confidence"]
@@ -210,6 +194,9 @@ def persist_result(db: Session, case: Case, values: dict[str, Any], paused: bool
     case.cold_cost_usd = round(sum(r.get("cold_cost_usd", r["cost_usd"]) for r in runs), 4)
     case.final_decision = None if paused else dec["decision"]
     case.status = "IN_REVIEW" if paused else "DECIDED"
+    for d in case.documents:
+        db.save_document(d)
+    db.save_case(case)
     audit.append(db, "system", "case_decided", case.id,
                  {"decision": dec["decision"], "confidence": dec["confidence"], "needs_review": paused,
                   "rules": {d["doc_id"]: d["rule_id"] for d in dec["documents"]}})

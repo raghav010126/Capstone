@@ -86,12 +86,10 @@ def test_rbac_matrix_writes(client, auth, fake_pipeline):
 
 
 def test_submitters_only_see_their_own_cases(client, auth, fake_pipeline):
-    from medishield.api.security import Role, hash_password
-    from medishield.db.models import User
-    from medishield.db.session import session_scope
+    from conftest import add_user
+    from medishield.api.security import Role
 
-    with session_scope() as db:
-        db.add(User(username="submitter2", display_name="S2", role=Role.SUBMITTER.value, password_hash=hash_password("pw-two")))
+    add_user("submitter2", Role.SUBMITTER.value, "pw-two", "S2")
     other = client.post("/auth/login", json={"username": "submitter2", "password": "pw-two"}).json()["access_token"]
     other = {"Authorization": f"Bearer {other}"}
     mine = upload(client, auth("submitter")).json()["case_id"]
@@ -360,21 +358,17 @@ def test_audit_chain_verifies_and_covers_the_workflow(client, auth, fake_pipelin
 
 
 def test_audit_detects_edited_event(client, auth, fake_pipeline):
-    from medishield.db.session import get_engine
-    from sqlalchemy import text
+    from conftest import tamper_audit
     upload(client, auth("submitter"))
-    with get_engine().begin() as conn:
-        conn.execute(text("UPDATE audit_events SET actor='mallory' WHERE seq=2"))
+    tamper_audit(2, actor="mallory")
     v = client.get("/audit/verify", headers=auth("auditor")).json()
     assert not v["ok"] and v["broken_at"] == 2 and "content" in v["reason"]
 
 
 def test_audit_detects_deleted_event(client, auth, fake_pipeline):
-    from medishield.db.session import get_engine
-    from sqlalchemy import text
+    from conftest import tamper_audit
     upload(client, auth("submitter"))
-    with get_engine().begin() as conn:
-        conn.execute(text("DELETE FROM audit_events WHERE seq=2"))
+    tamper_audit(2, delete=True)
     v = client.get("/audit/verify", headers=auth("auditor")).json()
     assert not v["ok"] and v["broken_at"] == 3 and "link" in v["reason"]
 
@@ -508,3 +502,44 @@ def test_rerun_starts_a_fresh_progress_log(client, auth, fake_pipeline):
     second = client.get(f"/cases/{cid}/events", headers=auth("submitter")).json()
     assert [e["node"] for e in second] == [e["node"] for e in first]          # one run's worth, not two
     assert min(e["id"] for e in second) > max(e["id"] for e in first)
+
+
+def test_ela_heatmap_only_for_jpeg(client, auth, fake_pipeline):
+    import io as _io
+
+    from PIL import Image as _Image
+    buf = _io.BytesIO()
+    _Image.new("RGB", (400, 300), "white").save(buf, format="JPEG", quality=85)
+    r = client.post("/cases", files=[("files", ("scan.jpg", buf.getvalue(), "image/jpeg")), ("files", ("page.png", png_bytes(), "image/png"))],
+                    headers=auth("submitter"))
+    cid = r.json()["case_id"]
+    ok = client.get(f"/cases/{cid}/documents/scan/ela", headers=auth("reviewer"))
+    assert ok.status_code == 200 and ok.content.startswith(b"\x89PNG")
+    assert client.get(f"/cases/{cid}/documents/page/ela", headers=auth("reviewer")).status_code == 404
+    assert client.get(f"/cases/{cid}/documents/scan/ela", headers={}).status_code == 401
+
+
+def test_old_databases_get_new_columns(env):
+    import sqlite3
+
+    from medishield.config import get_settings
+    from medishield.db.session import get_engine, reset_engine
+
+    path = get_settings().state_dir / "medishield.db"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE cases (id VARCHAR(32) PRIMARY KEY, submitted_by VARCHAR(64), status VARCHAR(16), "
+                 "risk_score FLOAT, total_amount FLOAT, wall_ms FLOAT, cost_usd FLOAT)")
+    conn.execute("INSERT INTO cases (id, submitted_by, status, risk_score, total_amount, wall_ms, cost_usd) "
+                 "VALUES ('CASE-OLD', 'x', 'DECIDED', 0, 0, 0, 0)")
+    conn.commit()
+    conn.close()
+    reset_engine()
+    get_engine()
+    cols = {r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(cases)")}
+    assert {"cold_cost_usd", "thread_id", "decision"} <= cols
+    from medishield.db.repo import SqlRepo
+    from medishield.db.session import session_scope
+
+    with session_scope() as s:                               # SQLite-specific: read through the SQL repo in either test mode
+        assert SqlRepo(s).get_case("CASE-OLD").cold_cost_usd == 0.0

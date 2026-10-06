@@ -22,7 +22,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from harness import OFFICIAL  # noqa: E402
+from harness import OFFICIAL
 
 HISTORY_SEED = 2024
 N_BACKGROUND_MEMBERS = 270

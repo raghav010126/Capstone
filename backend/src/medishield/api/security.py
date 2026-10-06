@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import threading
 import time
 from collections import defaultdict, deque
@@ -16,11 +15,10 @@ import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, Request, WebSocket, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
 
 from medishield.config import get_settings
-from medishield.db.models import User
-from medishield.db.session import session_scope
+from medishield.db.repo import repo_scope
+from medishield.phi import redact
 
 ALGORITHM = "HS256"
 _bearer = HTTPBearer(auto_error=False)
@@ -46,6 +44,7 @@ PERMISSIONS: dict[str, set[Role]] = {
     "audit:read": {R.AUDITOR, R.SENIOR_REVIEWER, R.ADMIN},
     "report:download": {R.REVIEWER, R.SENIOR_REVIEWER, R.AUDITOR, R.ADMIN},
     "policy:read": {R.REVIEWER, R.SENIOR_REVIEWER, R.AUDITOR, R.ADMIN},
+    "policy:ask": set(Role),                             # coverage questions in chat; the raw Policies page stays policy:read
     "policy:upload": {R.ADMIN},
     "user:admin": {R.ADMIN},
     "ops:read": {R.REVIEWER, R.SENIOR_REVIEWER, R.AUDITOR, R.ADMIN},
@@ -90,8 +89,8 @@ def decode_token(token: str) -> dict:
 
 def principal_from_token(token: str) -> Principal:
     claims = decode_token(token)
-    with session_scope() as db:                           # the user must still exist and be active
-        u = db.execute(select(User).where(User.username == claims["sub"])).scalar_one_or_none()
+    with repo_scope() as db:                              # the user must still exist and be active
+        u = db.get_user(claims["sub"])
         if u is None or not u.active:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "unknown or disabled user")
         return Principal(u.username, Role(u.role), u.display_name)
@@ -149,25 +148,7 @@ def client_key(request: Request, user: str | None = None) -> str:
     return user or (request.client.host if request.client else "unknown")
 
 
-# ── PHI redaction for logs and traces ────────────────────────────────────────────────────────────────
-_PHI_PATTERNS = [
-    (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[SSN]"),
-    (re.compile(r"\b\d{2}/\d{2}/\d{4}\b"), "[DATE]"),
-    (re.compile(r"\bMED-[A-Z]{3}-\d{5,}\b"), "[POLICY]"),
-    (re.compile(r"\bNPI-?\d{10}\b"), "[NPI]"),
-    (re.compile(r"\b[A-Z][a-z]+ [A-Z][a-z]+ [A-Z]\.(?!\w)"), "[NAME]"),
-    (re.compile(r"(?i)bearer\s+[\w.-]+"), "Bearer [TOKEN]"),
-    (re.compile(r"eyJ[\w-]+\.[\w-]+\.[\w-]+"), "[JWT]"),               # any JWT, wherever it appears
-    (re.compile(r"(?i)([?&]token=)[^&\s\"]+"), r"\1[TOKEN]"),            # WebSocket / SSE URLs carry the login token
-]
-
-
-def redact(text: str) -> str:
-    for pat, repl in _PHI_PATTERNS:
-        text = pat.sub(repl, text)
-    return text
-
-
+# ── PHI redaction for logs and traces (patterns live in medishield.phi) ─────────────────────────────────
 class PHIFilter(logging.Filter):
     """Redact in place and keep ``record.args`` intact: formatters (uvicorn's access log unpacks five fixed
     arguments) depend on its shape."""

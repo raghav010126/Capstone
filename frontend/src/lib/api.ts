@@ -15,6 +15,10 @@ export type TokenResponse = S["TokenResponse"]
 export type CaseCreated = S["CaseCreated"]
 export type AgentRunOut = S["AgentRunOut"]
 export type FraudResult = S["FraudResult"]
+export type ChatResponse = S["ChatResponse"]
+export type ChatScope = S["ChatScope"]
+export type UploadMode = S["UploadMode"]
+export type UploadGrant = S["UploadGrant"]
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8100"
 const TOKEN_KEY = "medishield.token"

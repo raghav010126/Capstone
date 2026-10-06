@@ -9,13 +9,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
 
-from medishield.api.routes import audit, auth, cases, ops, policies, review
+from medishield.api.routes import audit, auth, cases, chat, ops, policies, review
 from medishield.api.security import Role, hash_password, install_log_redaction
 from medishield.config import get_settings
-from medishield.db.models import User
-from medishield.db.session import get_engine, session_scope
+from medishield.db.repo import repo_scope
+from medishield.db.session import get_engine
 from medishield.worker.queue import start_worker
 
 log = logging.getLogger("medishield")
@@ -32,10 +31,10 @@ def seed_users() -> None:
     wanted = [(u, n, r, f"{u}-demo") for u, n, r in DEMO_USERS] if s.demo_users else []
     if os.environ.get("ADMIN_PASSWORD"):
         wanted.append((os.environ.get("ADMIN_USERNAME", "admin"), "Administrator", Role.ADMIN, os.environ["ADMIN_PASSWORD"]))
-    with session_scope() as db:
+    with repo_scope() as db:
         for username, name, role, pw in wanted:
-            if db.execute(select(User).where(User.username == username)).scalar_one_or_none() is None:
-                db.add(User(username=username, display_name=name, role=role.value, password_hash=hash_password(pw)))
+            if db.get_user(username) is None:
+                db.add_user(username, name, role.value, hash_password(pw))
 
 
 def _warm() -> None:
@@ -89,7 +88,7 @@ def create_app() -> FastAPI:
     def readyz():
         return {"status": "ready" if ready["policy_store"] else "warming", **ready}
 
-    for r in (auth.router, cases.router, review.router, audit.router, policies.router, ops.router):
+    for r in (auth.router, cases.router, review.router, audit.router, policies.router, ops.router, chat.router):
         app.include_router(r)
     return app
 

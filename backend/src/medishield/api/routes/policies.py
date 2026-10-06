@@ -1,16 +1,15 @@
 from __future__ import annotations
 
+import importlib.util
 import re
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from medishield.api import schemas as S
 from medishield.api.deps import get_db
 from medishield.api.security import Principal, require
 from medishield.api.uploads import UploadError
-from medishield.db.models import PolicyDoc
+from medishield.db.repo import Repo
 from medishield.services import policies as svc
 from medishield.worker.queue import enqueue_policy
 
@@ -18,7 +17,7 @@ router = APIRouter(tags=["policies"])
 MAX_POLICY_BYTES = 25 * 1024 * 1024
 
 
-def out(p: PolicyDoc) -> S.PolicyOut:
+def out(p) -> S.PolicyOut:
     return S.PolicyOut(id=p.id, plan=p.plan, filename=p.filename, status=p.status, product_code=p.product_code,
                        chunk_count=p.chunk_count, exclusion_rows=len(p.ranges or []), uploaded_by=p.uploaded_by,
                        error=p.error, created_at=p.created_at)
@@ -41,30 +40,30 @@ def bundled() -> list[tuple[int, S.PolicyOut, list[dict]]]:
 
 
 @router.get("/policies", response_model=list[S.PolicyOut])
-def list_policies(_: Principal = Depends(require("policy:read")), db: Session = Depends(get_db)):
-    uploaded = [out(p) for p in db.execute(select(PolicyDoc).order_by(PolicyDoc.id.desc())).scalars()]
+def list_policies(_: Principal = Depends(require("policy:read")), db: Repo = Depends(get_db)):
+    uploaded = [out(p) for p in db.list_policies()]
     return uploaded + [o for _id, o, _r in bundled()]
 
 
 @router.get("/policies/{policy_id}", response_model=S.PolicyOut)
-def policy_status(policy_id: int, _: Principal = Depends(require("policy:read")), db: Session = Depends(get_db)):
+def policy_status(policy_id: int, _: Principal = Depends(require("policy:read")), db: Repo = Depends(get_db)):
     if policy_id < 0:
         found = next((o for i, o, _r in bundled() if i == policy_id), None)
         if found:
             return found
-    p = db.get(PolicyDoc, policy_id) if policy_id > 0 else None
+    p = db.get_policy(policy_id) if policy_id > 0 else None
     if p is None:
         raise HTTPException(404, "policy not found")
     return out(p)
 
 
 @router.get("/policies/{policy_id}/ranges")
-def policy_ranges(policy_id: int, _: Principal = Depends(require("policy:read")), db: Session = Depends(get_db)):
+def policy_ranges(policy_id: int, _: Principal = Depends(require("policy:read")), db: Repo = Depends(get_db)):
     if policy_id < 0:
         found = next(((o.plan, r) for i, o, r in bundled() if i == policy_id), None)
         if found:
             return {"plan": found[0], "ranges": found[1]}
-    p = db.get(PolicyDoc, policy_id) if policy_id > 0 else None
+    p = db.get_policy(policy_id) if policy_id > 0 else None
     if p is None:
         raise HTTPException(404, "policy not found")
     return {"plan": p.plan, "ranges": p.ranges or []}
@@ -72,7 +71,10 @@ def policy_ranges(policy_id: int, _: Principal = Depends(require("policy:read"))
 
 @router.post("/policies", response_model=S.PolicyOut, status_code=202)
 async def upload_policy(plan: str = Form(..., pattern=r"^[a-z][a-z0-9_]{1,23}$"), file: UploadFile = File(...),
-                        user: Principal = Depends(require("policy:upload")), db: Session = Depends(get_db)):
+                        user: Principal = Depends(require("policy:upload")), db: Repo = Depends(get_db)):
+    if importlib.util.find_spec("docling") is None:
+        raise HTTPException(501, "policy ingestion needs the Docling parser, which this deployment does not include; "
+                                 "the bundled policies are in use")
     data = await file.read(MAX_POLICY_BYTES + 1)
     if len(data) > MAX_POLICY_BYTES:
         raise HTTPException(413, "policy PDF exceeds 25 MB")
@@ -82,5 +84,5 @@ async def upload_policy(plan: str = Form(..., pattern=r"^[a-z][a-z0-9_]{1,23}$")
         raise HTTPException(e.status, str(e)) from e
     db.commit()
     enqueue_policy(pid)
-    return out(db.get(PolicyDoc, pid))
+    return out(db.get_policy(pid))
 

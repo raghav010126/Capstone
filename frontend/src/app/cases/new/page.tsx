@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useQueryClient } from "@tanstack/react-query"
 import { CloudUpload, FileImage, FileText, Loader2, Trash2, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
-import { api, ApiError, type CaseCreated, type CaseDetail } from "@/lib/api"
+import { api, ApiError, type CaseCreated, type CaseDetail, type UploadGrant, type UploadMode } from "@/lib/api"
 import { useCaseEvents } from "@/hooks/use-case-events"
 import { AppShell } from "@/components/app-shell"
 import { PipelineGraph } from "@/components/pipeline-graph"
@@ -64,9 +64,27 @@ export default function NewCasePage() {
   async function submit() {
     setBusy(true)
     try {
-      const fd = new FormData()
-      files.forEach((f) => fd.append("files", f))
-      const res = await api<CaseCreated>("/cases", { method: "POST", body: fd, headers: { "Idempotency-Key": idempotencyKey } })
+      const headers = { "Idempotency-Key": idempotencyKey }
+      const mode = await api<UploadMode>("/cases/upload-mode")
+      let res: CaseCreated
+      if (mode.mode === "presigned") {
+        // on AWS a request to the API may carry at most 6 MB: the files go straight to S3 with one-time signed forms
+        const grant = await api<UploadGrant>("/cases/uploads", { method: "POST", json: { files: files.map((f) => ({ filename: f.name, size: f.size })) } })
+        await Promise.all(
+          grant.uploads.map(async (t, i) => {
+            const fd = new FormData()
+            Object.entries(t.fields).forEach(([k, v]) => fd.append(k, v))
+            fd.append("file", files[i])
+            const r = await fetch(t.url, { method: "POST", body: fd })
+            if (!r.ok) throw new ApiError(r.status, `Upload of ${files[i].name} failed`)
+          }),
+        )
+        res = await api<CaseCreated>("/cases/from-uploads", { method: "POST", json: { upload_id: grant.upload_id }, headers })
+      } else {
+        const fd = new FormData()
+        files.forEach((f) => fd.append("files", f))
+        res = await api<CaseCreated>("/cases", { method: "POST", body: fd, headers })
+      }
       res.warnings.forEach((w) => toast.warning(w))
       setCreated(res)
       setFinished(false)
@@ -176,7 +194,7 @@ export default function NewCasePage() {
                     <Button variant="outline" onClick={reset}>
                       Submit another
                     </Button>
-                    <Link href={`/cases/${created.case_id}`} className={buttonVariants()}>
+                    <Link href={`/cases/view?id=${created.case_id}`} className={buttonVariants()}>
                       Open case <ArrowRight />
                     </Link>
                   </div>

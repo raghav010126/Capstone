@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import type { ReactNode } from "react"
-import { BarChart3, FilePlus2, FileText, LayoutDashboard, LogOut, ScrollText, ShieldCheck, ShieldOff, ClipboardCheck } from "lucide-react"
+import { BarChart3, ClipboardCheck, FilePlus2, FileText, LayoutDashboard, LogOut, MessagesSquare, ScrollText, ShieldCheck, ShieldOff } from "lucide-react"
 import { useRequireAuth } from "@/lib/auth"
 import { ROLE_LABEL } from "@/lib/api"
 import { cn } from "@/lib/utils"
@@ -17,6 +17,7 @@ const NAV = [
   { href: "/audit", label: "Audit log", icon: ScrollText, perm: "audit:read" },
   { href: "/policies", label: "Policies", icon: FileText, perm: "policy:read" },
   { href: "/insights", label: "Insights", icon: BarChart3, perm: "ops:read" },
+  { href: "/chat", label: "Assistant", icon: MessagesSquare, perm: "policy:ask" },
 ]
 
 export function AppShell({ title, subtitle, actions, requires, children }: { title: string; subtitle?: string; actions?: ReactNode; requires?: string; children: ReactNode }) {

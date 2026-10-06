@@ -1,0 +1,374 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  MediShield serverless deployment. Pay-per-use only: Bedrock AgentCore Runtime (agents), Lambda (API), DynamoDB on-demand, S3,
+  CloudFront (cheapest price class).
+  No NAT gateway, no WAF, no provisioned capacity. Stage 1 (ImageTag=none) creates only the image registry and the image builder;
+  stage 2 (ImageTag=<built tag>) adds the application. `scripts/aws_destroy.sh` removes everything.
+
+Parameters:
+  Project: {Type: String, Default: medishield}
+  ImageTag: {Type: String, Default: none, Description: "'none' for stage 1; the pushed image tag for stage 2"}
+  AlertEmail: {Type: String, Description: "Receives the cost alerts"}
+  MonthlyBudgetUsd: {Type: Number, Default: 10, Description: "AWS bill alert threshold (not a hard stop)"}
+  ModelBudgetUsd: {Type: Number, Default: 10, Description: "Hard cap on Anthropic spend by the live site (the laptop has its own cap; together they stay within the project budget)"}
+  DailyModelBudgetUsd: {Type: Number, Default: 5, Description: "Hard cap on Anthropic spend per UTC day"}
+  DemoUsers: {Type: String, Default: "1", AllowedValues: ["0", "1"], Description: "1 creates the five demo accounts (documented in the README)"}
+  VisionMode: {Type: String, Default: auto, AllowedValues: [auto, always]}
+  SsmPrefix: {Type: String, Default: /medishield/}
+
+Conditions:
+  HasImage: !Not [!Equals [!Ref ImageTag, none]]
+
+Resources:
+  # ── image registry and builder (no Docker needed on the laptop) ────────────────────────────────────
+  Repo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref Project
+      EmptyOnDelete: true
+      LifecyclePolicy:
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"keep two images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":2},"action":{"type":"expire"}}]}'
+
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration: {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+      LifecycleConfiguration: {Rules: [{Id: expire, Status: Enabled, ExpirationInDays: 7}]}
+
+  BuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{Effect: Allow, Principal: {Service: codebuild.amazonaws.com}, Action: "sts:AssumeRole"}]
+      Policies:
+        - PolicyName: build
+          PolicyDocument:
+            Statement:
+              - {Effect: Allow, Action: ["ecr:GetAuthorizationToken"], Resource: "*"}
+              - Effect: Allow
+                Action: ["ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]
+                Resource: !GetAtt Repo.Arn
+              - {Effect: Allow, Action: ["s3:GetObject", "s3:GetObjectVersion"], Resource: !Sub "${SourceBucket.Arn}/*"}
+              - {Effect: Allow, Action: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"], Resource: "*"}
+
+  Build:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${Project}-image"
+      ServiceRole: !GetAtt BuildRole.Arn
+      Artifacts: {Type: NO_ARTIFACTS}
+      Source: {Type: S3, Location: !Sub "${SourceBucket}/source.zip", BuildSpec: infra/buildspec.yml}
+      TimeoutInMinutes: 40
+      Environment:
+        Type: ARM_CONTAINER                      # AgentCore Runtime needs ARM64 images
+        ComputeType: BUILD_GENERAL1_LARGE
+        Image: aws/codebuild/amazonlinux-aarch64-standard:3.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - {Name: ECR_REGISTRY, Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"}
+          - {Name: ECR_REPO, Value: !Ref Repo}
+
+  # ── data ──────────────────────────────────────────────────────────────────────────────────────────
+  Table:
+    Type: AWS::DynamoDB::Table
+    Condition: HasImage
+    Properties:
+      TableName: !Ref Project
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - {AttributeName: pk, AttributeType: S}
+        - {AttributeName: sk, AttributeType: S}
+        - {AttributeName: gsi1pk, AttributeType: S}
+        - {AttributeName: gsi1sk, AttributeType: S}
+      KeySchema: [{AttributeName: pk, KeyType: HASH}, {AttributeName: sk, KeyType: RANGE}]
+      GlobalSecondaryIndexes:
+        - IndexName: gsi1
+          KeySchema: [{AttributeName: gsi1pk, KeyType: HASH}, {AttributeName: gsi1sk, KeyType: RANGE}]
+          Projection: {ProjectionType: ALL}
+      TimeToLiveSpecification: {AttributeName: ttl, Enabled: true}
+
+  DocsBucket:
+    Type: AWS::S3::Bucket
+    Condition: HasImage
+    Properties:
+      PublicAccessBlockConfiguration: {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+      LifecycleConfiguration:
+        Rules:
+          - {Id: expire, Status: Enabled, ExpirationInDays: 60}
+          - {Id: abandoned-uploads, Status: Enabled, Prefix: uploads/, ExpirationInDays: 1}
+      CorsConfiguration:                       # browsers upload case files straight to S3 with one-time signed forms
+        CorsRules: [{AllowedMethods: [POST], AllowedOrigins: ["*"], AllowedHeaders: ["*"], MaxAge: 3000}]
+      BucketEncryption: {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]}
+
+  WebBucket:
+    Type: AWS::S3::Bucket
+    Condition: HasImage
+    Properties:
+      PublicAccessBlockConfiguration: {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+
+  # ── functions ─────────────────────────────────────────────────────────────────────────────────────
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Condition: HasImage
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: "sts:AssumeRole"}]
+      ManagedPolicyArns: ["arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"]
+      Policies:
+        - PolicyName: app
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:BatchWriteItem"]
+                Resource: [!GetAtt Table.Arn, !Sub "${Table.Arn}/index/*"]
+              - {Effect: Allow, Action: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource: !Sub "${DocsBucket.Arn}/*"}
+              - Effect: Allow
+                Action: "s3:ListBucket"
+                Resource: !GetAtt DocsBucket.Arn
+                Condition: {StringLike: {"s3:prefix": "uploads/*"}}
+              - {Effect: Allow, Action: ["ssm:GetParametersByPath", "ssm:GetParameter"], Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmPrefix}*"}
+              - Effect: Allow
+                Action: ["bedrock-agentcore:InvokeAgentRuntime"]
+                Resource: [!GetAtt PipelineRuntime.AgentRuntimeArn, !Sub "${PipelineRuntime.AgentRuntimeArn}/*",
+                           !GetAtt AssistantRuntime.AgentRuntimeArn, !Sub "${AssistantRuntime.AgentRuntimeArn}/*"]
+
+  # ── agents: Bedrock AgentCore Runtime (one ARM64 image; AGENT_ROLE picks the agent) ─────────────────
+  AgentRole:
+    Type: AWS::IAM::Role
+    Condition: HasImage
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: {Service: bedrock-agentcore.amazonaws.com}
+            Action: "sts:AssumeRole"
+            Condition:
+              StringEquals: {"aws:SourceAccount": !Ref "AWS::AccountId"}
+              ArnLike: {"aws:SourceArn": !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:*"}
+      Policies:
+        - PolicyName: runtime
+          PolicyDocument:
+            Statement:
+              - {Effect: Allow, Action: ["ecr:GetAuthorizationToken"], Resource: "*"}
+              - {Effect: Allow, Action: ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"], Resource: !GetAtt Repo.Arn}
+              - Effect: Allow
+                Action: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams", "logs:DescribeLogGroups"]
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
+              - {Effect: Allow, Action: ["xray:PutTraceSegments", "xray:PutTelemetryRecords", "xray:GetSamplingRules", "xray:GetSamplingTargets"], Resource: "*"}
+              - Effect: Allow
+                Action: "cloudwatch:PutMetricData"
+                Resource: "*"
+                Condition: {StringEquals: {"cloudwatch:namespace": bedrock-agentcore}}
+        - PolicyName: app
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:BatchWriteItem"]
+                Resource: [!GetAtt Table.Arn, !Sub "${Table.Arn}/index/*"]
+              - {Effect: Allow, Action: ["s3:GetObject", "s3:PutObject"], Resource: !Sub "${DocsBucket.Arn}/*"}
+              - {Effect: Allow, Action: ["ssm:GetParametersByPath", "ssm:GetParameter"], Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmPrefix}*"}
+              - Effect: Allow
+                Action: ["bedrock-agentcore:CreateEvent", "bedrock-agentcore:ListEvents", "bedrock-agentcore:GetEvent",
+                         "bedrock-agentcore:RetrieveMemoryRecords", "bedrock-agentcore:ListMemoryRecords"]
+                Resource: !GetAtt ChatMemory.MemoryArn
+
+  ChatMemory:
+    Type: AWS::BedrockAgentCore::Memory
+    Condition: HasImage
+    Properties:
+      Name: !Sub "${Project}_chat_memory"
+      Description: Assistant conversations (short-term) and per-user facts and preferences (long-term); text is PHI-redacted first
+      EventExpiryDuration: 30
+      MemoryStrategies:
+        - SemanticMemoryStrategy: {Name: user_facts, Namespaces: ["/users/{actorId}/facts"]}
+        - UserPreferenceMemoryStrategy: {Name: user_preferences, Namespaces: ["/users/{actorId}/preferences"]}
+
+  AssistantRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Condition: HasImage
+    Properties:
+      AgentRuntimeName: !Sub "${Project}_assistant"
+      Description: MediShield role-aware assistant - policy, case and analytics questions with citations
+      AgentRuntimeArtifact:
+        ContainerConfiguration: {ContainerUri: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repo}:${ImageTag}"}
+      RoleArn: !GetAtt AgentRole.Arn
+      NetworkConfiguration: {NetworkMode: PUBLIC}
+      ProtocolConfiguration: HTTP
+      LifecycleConfiguration: {IdleRuntimeSessionTimeout: 600, MaxLifetime: 7200}    # a conversation stays warm for 10 minutes
+      EnvironmentVariables:
+        AGENT_ROLE: assistant
+        CHAT_MEMORY_ID: !GetAtt ChatMemory.MemoryId
+        DYNAMO_TABLE: !Ref Table
+        S3_BUCKET: !Ref DocsBucket
+        SSM_PREFIX: !Ref SsmPrefix
+        AWS_DEFAULT_REGION: !Ref "AWS::Region"
+        MEDISHIELD_BUDGET_USD: !Ref ModelBudgetUsd
+        MEDISHIELD_DAILY_BUDGET_USD: !Ref DailyModelBudgetUsd
+
+  PipelineRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Condition: HasImage
+    Properties:
+      AgentRuntimeName: !Sub "${Project}_pipeline"
+      Description: MediShield case pipeline (LangGraph) - classify, extract, KYC, claims, policy RAG, fraud, decide
+      AgentRuntimeArtifact:
+        ContainerConfiguration: {ContainerUri: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repo}:${ImageTag}"}
+      RoleArn: !GetAtt AgentRole.Arn
+      NetworkConfiguration: {NetworkMode: PUBLIC}
+      ProtocolConfiguration: HTTP
+      LifecycleConfiguration: {IdleRuntimeSessionTimeout: 120, MaxLifetime: 3600}    # free the microVM 2 min after a case
+      EnvironmentVariables:
+        AGENT_ROLE: pipeline
+        DYNAMO_TABLE: !Ref Table
+        S3_BUCKET: !Ref DocsBucket
+        SSM_PREFIX: !Ref SsmPrefix
+        AWS_DEFAULT_REGION: !Ref "AWS::Region"
+        MEDISHIELD_BUDGET_USD: !Ref ModelBudgetUsd
+        MEDISHIELD_DAILY_BUDGET_USD: !Ref DailyModelBudgetUsd
+        MEDISHIELD_VISION: !Ref VisionMode
+
+  ApiLogs:
+    Type: AWS::Logs::LogGroup
+    Condition: HasImage
+    Properties: {LogGroupName: !Sub "/aws/lambda/${Project}-api", RetentionInDays: 7}
+
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasImage
+    DependsOn: ApiLogs
+    Properties:
+      FunctionName: !Sub "${Project}-api"
+      PackageType: Image
+      Code: {ImageUri: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repo}:${ImageTag}"}
+      Architectures: [arm64]
+      ImageConfig:                                          # same image as the agents, run through the Lambda runtime client
+        EntryPoint: ["python", "-m", "awslambdaric"]
+        Command: ["medishield.aws_handlers.api_handler"]
+        WorkingDirectory: /app
+      Role: !GetAtt FunctionRole.Arn
+      MemorySize: 1536
+      Timeout: 60
+      Environment:
+        Variables:
+          DYNAMO_TABLE: !Ref Table
+          S3_BUCKET: !Ref DocsBucket
+          PIPELINE_RUNTIME_ARN: !GetAtt PipelineRuntime.AgentRuntimeArn
+          ASSISTANT_RUNTIME_ARN: !GetAtt AssistantRuntime.AgentRuntimeArn
+          SSM_PREFIX: !Ref SsmPrefix
+          API_BASE_PATH: /api
+          MEDISHIELD_BUDGET_USD: !Ref ModelBudgetUsd
+          MEDISHIELD_DAILY_BUDGET_USD: !Ref DailyModelBudgetUsd
+          MEDISHIELD_DEMO_USERS: !Ref DemoUsers
+          MEDISHIELD_VISION: !Ref VisionMode
+          LANGSMITH_TRACING_V2: "false"
+
+  ApiUrl:
+    Type: AWS::Lambda::Url
+    Condition: HasImage
+    Properties: {TargetFunctionArn: !GetAtt ApiFunction.Arn, AuthType: NONE}
+
+  ApiUrlInvoke:
+    Type: AWS::Lambda::Permission
+    Condition: HasImage
+    Properties: {Action: "lambda:InvokeFunctionUrl", FunctionName: !Ref ApiFunction, Principal: "*", FunctionUrlAuthType: NONE}
+
+  ApiUrlInvoke2:
+    Type: AWS::Lambda::Permission
+    Condition: HasImage
+    Properties: {Action: "lambda:InvokeFunction", FunctionName: !Ref ApiFunction, Principal: "*", InvokedViaFunctionUrl: true}
+
+  # ── website: static files from S3, /api/* to the Lambda ──────────────────────────────────────────
+  Oac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Condition: HasImage
+    Properties:
+      OriginAccessControlConfig: {Name: !Sub "${Project}-web", OriginAccessControlOriginType: s3, SigningBehavior: always, SigningProtocol: sigv4}
+
+  Rewrite:
+    Type: AWS::CloudFront::Function
+    Condition: HasImage
+    Properties:
+      Name: !Sub "${Project}-rewrite"
+      AutoPublish: true
+      FunctionConfig: {Comment: "static export: map /path and /path/ to index.html", Runtime: cloudfront-js-2.0}
+      FunctionCode: |
+        function handler(event) {
+          var r = event.request;
+          if (r.uri.endsWith('/')) r.uri += 'index.html';
+          else if (r.uri.indexOf('.') === -1) r.uri += '/index.html';
+          return r;
+        }
+
+  Site:
+    Type: AWS::CloudFront::Distribution
+    Condition: HasImage
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        PriceClass: PriceClass_100
+        HttpVersion: http2
+        DefaultRootObject: index.html
+        Origins:
+          - Id: web
+            DomainName: !GetAtt WebBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt Oac.Id
+            S3OriginConfig: {OriginAccessIdentity: ""}
+          - Id: api
+            DomainName: !Select [2, !Split ["/", !GetAtt ApiUrl.FunctionUrl]]
+            CustomOriginConfig: {OriginProtocolPolicy: https-only, OriginReadTimeout: 60}
+        DefaultCacheBehavior:
+          TargetOriginId: web
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6   # Managed-CachingOptimized
+          FunctionAssociations: [{EventType: viewer-request, FunctionARN: !GetAtt Rewrite.FunctionMetadata.FunctionARN}]
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # Managed-AllViewerExceptHostHeader
+
+  WebBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: HasImage
+    Properties:
+      Bucket: !Ref WebBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: {Service: cloudfront.amazonaws.com}
+            Action: "s3:GetObject"
+            Resource: !Sub "${WebBucket.Arn}/*"
+            Condition: {StringEquals: {"AWS:SourceArn": !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${Site}"}}
+
+  # ── cost alert ────────────────────────────────────────────────────────────────────────────────────
+  Budget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${Project}-monthly"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: {Amount: !Ref MonthlyBudgetUsd, Unit: USD}
+      NotificationsWithSubscribers:
+        - Notification: {NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 50, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref AlertEmail}]
+        - Notification: {NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref AlertEmail}]
+        - Notification: {NotificationType: FORECASTED, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref AlertEmail}]
+
+Outputs:
+  EcrRepository: {Value: !Ref Repo}
+  SourceBucketName: {Value: !Ref SourceBucket}
+  BuildProject: {Value: !Ref Build}
+  SiteUrl: {Condition: HasImage, Value: !Sub "https://${Site.DomainName}"}
+  DistributionId: {Condition: HasImage, Value: !Ref Site}
+  WebBucketName: {Condition: HasImage, Value: !Ref WebBucket}
+  DocsBucketName: {Condition: HasImage, Value: !Ref DocsBucket}
+  TableName: {Condition: HasImage, Value: !Ref Table}
+  PipelineRuntimeArn: {Condition: HasImage, Value: !GetAtt PipelineRuntime.AgentRuntimeArn}
+  AssistantRuntimeArn: {Condition: HasImage, Value: !GetAtt AssistantRuntime.AgentRuntimeArn}
+  ChatMemoryId: {Condition: HasImage, Value: !GetAtt ChatMemory.MemoryId}

@@ -90,6 +90,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cases/upload-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Upload Mode
+         * @description Behind Lambda a request may carry at most 6 MB, so on AWS files go straight to S3 and the API reads them from there.
+         */
+        get: operations["upload_mode_cases_upload_mode_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cases/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant Uploads */
+        post: operations["grant_uploads_cases_uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cases/from-uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create From Uploads
+         * @description Create a case from files the browser uploaded with /cases/uploads. Only the caller's own upload prefix is read.
+         */
+        post: operations["create_from_uploads_cases_from_uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cases/{case_id}": {
         parameters: {
             query?: never;
@@ -116,6 +173,26 @@ export interface paths {
         };
         /** Document Image */
         get: operations["document_image_cases__case_id__documents__doc_id__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cases/{case_id}/documents/{doc_id}/ela": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Document Ela
+         * @description Error Level Analysis heatmap for a JPEG document (computed on demand; other file types have no compression history).
+         */
+        get: operations["document_ela_cases__case_id__documents__doc_id__ela_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -443,6 +520,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/chat/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Chat Scope
+         * @description What this user's role may ask about, for the chat page (the same map the assistant enforces).
+         */
+        get: operations["chat_scope_chat_scope_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Chat */
+        post: operations["chat_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -658,6 +772,84 @@ export interface components {
             /** Head */
             head?: string | null;
         };
+        /** ChatRequest */
+        ChatRequest: {
+            /** Question */
+            question: string;
+            /** Conversation Id */
+            conversation_id?: string | null;
+        };
+        /** ChatResponse */
+        ChatResponse: {
+            /** Answer */
+            answer: string;
+            /** Route */
+            route: string;
+            /** Blocked */
+            blocked: boolean;
+            /** Role */
+            role: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * Router
+             * @default
+             */
+            router: string;
+            /** Sql */
+            sql?: string | null;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: components["schemas"]["ChatSource"][];
+            /**
+             * Accessible
+             * @default []
+             */
+            accessible: string[];
+            /**
+             * Restricted
+             * @default []
+             */
+            restricted: string[];
+        };
+        /** ChatScope */
+        ChatScope: {
+            /** Role */
+            role: string;
+            /** Accessible */
+            accessible: components["schemas"]["ChatSourceInfo"][];
+            /** Restricted */
+            restricted: components["schemas"]["ChatSourceInfo"][];
+            /** Examples */
+            examples: string[];
+        };
+        /** ChatSource */
+        ChatSource: {
+            /** N */
+            n: number;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /** Url */
+            url?: string | null;
+            /** Page */
+            page?: number | null;
+            /**
+             * Cited
+             * @default false
+             */
+            cited: boolean;
+        };
+        /** ChatSourceInfo */
+        ChatSourceInfo: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+        };
         /** Check */
         Check: {
             /** Name */
@@ -709,6 +901,12 @@ export interface components {
             keyword_margin: number;
             /** Reason */
             reason: string;
+            /**
+             * Language
+             * @description detected script/language of the page: en, es, hi
+             * @default en
+             */
+            language: string;
         };
         /** CodeCoverage */
         CodeCoverage: {
@@ -890,6 +1088,11 @@ export interface components {
              */
             narrative: string;
         };
+        /** FromUploads */
+        FromUploads: {
+            /** Upload Id */
+            upload_id: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -920,6 +1123,13 @@ export interface components {
             reference_date?: string | null;
             /** Checks */
             checks?: components["schemas"]["Check"][];
+            /**
+             * Forensics
+             * @description ELA / typography findings (evidence for reviewers)
+             */
+            forensics?: {
+                [key: string]: unknown;
+            };
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1099,6 +1309,45 @@ export interface components {
             role: string;
             /** Display Name */
             display_name: string;
+        };
+        /** UploadFileSpec */
+        UploadFileSpec: {
+            /** Filename */
+            filename: string;
+            /** Size */
+            size: number;
+        };
+        /** UploadGrant */
+        UploadGrant: {
+            /** Upload Id */
+            upload_id: string;
+            /** Uploads */
+            uploads: components["schemas"]["UploadTarget"][];
+        };
+        /** UploadMode */
+        UploadMode: {
+            /** Mode */
+            mode: string;
+            /** Max File Bytes */
+            max_file_bytes: number;
+            /** Max Files */
+            max_files: number;
+        };
+        /** UploadRequest */
+        UploadRequest: {
+            /** Files */
+            files: components["schemas"]["UploadFileSpec"][];
+        };
+        /** UploadTarget */
+        UploadTarget: {
+            /** Url */
+            url: string;
+            /** Fields */
+            fields: {
+                [key: string]: string;
+            };
+            /** Key */
+            key: string;
         };
         /** UserOut */
         UserOut: {
@@ -1298,6 +1547,94 @@ export interface operations {
             };
         };
     };
+    upload_mode_cases_upload_mode_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadMode"];
+                };
+            };
+        };
+    };
+    grant_uploads_cases_uploads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadGrant"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_from_uploads_cases_from_uploads_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "idempotency-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FromUploads"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     case_detail_cases__case_id__get: {
         parameters: {
             query?: never;
@@ -1330,6 +1667,38 @@ export interface operations {
         };
     };
     document_image_cases__case_id__documents__doc_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    document_ela_cases__case_id__documents__doc_id__ela_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1891,6 +2260,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    chat_scope_chat_scope_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatScope"];
+                };
+            };
+        };
+    };
+    chat_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

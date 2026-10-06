@@ -45,6 +45,7 @@ class Classification(Strict):
     keyword_doc_type: DocType | None
     keyword_margin: float
     reason: str
+    language: str = Field(default="en", description="detected script/language of the page: en, es, hi")
 
 
 # ── OCR / extraction ──────────────────────────────────────────────────────────────────────────────────
@@ -89,6 +90,7 @@ class KycResult(Strict):
     member_id: str | None = None
     reference_date: str | None = Field(default=None, description="date of service used for expiry checks")
     checks: list[Check] = Field(default_factory=list)
+    forensics: dict[str, Any] = Field(default_factory=dict, description="ELA / typography findings (evidence for reviewers)")
 
 
 class ClaimsResult(Strict):

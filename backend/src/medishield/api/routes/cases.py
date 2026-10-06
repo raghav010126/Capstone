@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import (
@@ -18,8 +20,6 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 from medishield.api import schemas as S
 from medishield.api.deps import get_case, get_db, stream_user
@@ -27,8 +27,7 @@ from medishield.api.security import Principal, Role, client_key, limiter, princi
 from medishield.api.uploads import UploadError
 from medishield.config import get_settings
 from medishield.db import audit
-from medishield.db.models import AgentRunRow, Case, CaseEvent, Document, Override
-from medishield.db.session import session_scope
+from medishield.db.repo import Repo, repo_scope
 from medishield.llm import BudgetExceeded, ledger
 from medishield.schemas import (
     CaseDecision,
@@ -49,7 +48,7 @@ router = APIRouter(tags=["cases"])
 TERMINAL = {"DECIDED", "IN_REVIEW", "FINALIZED", "FAILED"}
 
 
-def summary(c: Case, pending: bool = False) -> S.CaseSummary:
+def summary(c, pending: bool = False) -> S.CaseSummary:
     due = svc.sla_due(c)
     open_case = c.status == "IN_REVIEW"
     return S.CaseSummary(
@@ -60,7 +59,7 @@ def summary(c: Case, pending: bool = False) -> S.CaseSummary:
         pending_override=pending, error=c.error)
 
 
-def document_out(case_id: str, d: Document) -> S.DocumentOut:
+def document_out(case_id: str, d) -> S.DocumentOut:
     ext, sp = d.extraction or {}, d.specialists or {}
     return S.DocumentOut(
         doc_id=d.doc_id, filename=d.filename, position=d.position, media_type=d.media_type, doc_type=d.doc_type,
@@ -75,14 +74,11 @@ def document_out(case_id: str, d: Document) -> S.DocumentOut:
         image_url=f"/cases/{case_id}/documents/{d.doc_id}/image", forced_type=d.forced_type)
 
 
-def override_out(o: Override) -> S.OverrideOut:
+def override_out(o) -> S.OverrideOut:
     return S.OverrideOut.model_validate(o, from_attributes=True)
 
 
-@router.post("/cases", response_model=S.CaseCreated, status_code=202)
-async def create_case(request: Request, response: Response, files: list[UploadFile] = File(...),
-                      idempotency_key: str | None = Header(default=None, max_length=128),
-                      user: Principal = Depends(require("case:create")), db: Session = Depends(get_db)):
+def _admit(user: Principal) -> None:
     s = get_settings()
     limiter.check(f"upload:{user.username}", s.upload_rate_per_min)
     try:
@@ -90,10 +86,72 @@ async def create_case(request: Request, response: Response, files: list[UploadFi
         ledger().check_daily()
     except BudgetExceeded as e:
         raise HTTPException(503, f"processing is paused: {e}") from e
+
+
+@router.post("/cases", response_model=S.CaseCreated, status_code=202)
+async def create_case(request: Request, response: Response, files: list[UploadFile] = File(...),
+                      idempotency_key: str | None = Header(default=None, max_length=128),
+                      user: Principal = Depends(require("case:create")), db: Repo = Depends(get_db)):
+    s = get_settings()
+    _admit(user)
     blobs: list[tuple[str, bytes]] = []
     for f in files[: s.max_files_per_case + 1]:
         data = await f.read(s.max_upload_bytes + 1)                       # never buffer more than the cap
         blobs.append((f.filename or "document", data))
+    return _create(request, response, user, db, blobs, idempotency_key)
+
+
+@router.get("/cases/upload-mode", response_model=S.UploadMode)
+def upload_mode(user: Principal = Depends(require("case:create"))):
+    """Behind Lambda a request may carry at most 6 MB, so on AWS files go straight to S3 and the API reads them from there."""
+    s = get_settings()
+    return S.UploadMode(mode="presigned" if s.storage_backend == "s3" else "direct", max_file_bytes=s.max_upload_bytes,
+                        max_files=s.max_files_per_case)
+
+
+def _upload_prefix(user: Principal, upload_id: str) -> str:
+    return f"uploads/{re.sub(r'[^A-Za-z0-9_-]', '_', user.username)}/{upload_id}/"
+
+
+@router.post("/cases/uploads", response_model=S.UploadGrant)
+def grant_uploads(body: S.UploadRequest, user: Principal = Depends(require("case:create"))):
+    s = get_settings()
+    if s.storage_backend != "s3":
+        raise HTTPException(409, "direct uploads are only used with S3 storage; POST /cases instead")
+    if len(body.files) > s.max_files_per_case:
+        raise HTTPException(413, f"at most {s.max_files_per_case} files per case")
+    too_big = [f.filename for f in body.files if f.size > s.max_upload_bytes]
+    if too_big:
+        raise HTTPException(413, f"larger than {s.max_upload_bytes // 1_000_000} MB: {', '.join(too_big)}")
+    _admit(user)
+    upload_id, storage = uuid.uuid4().hex, get_storage()
+    targets = []
+    for i, f in enumerate(body.files):
+        key = _upload_prefix(user, upload_id) + f"{i:02d}-" + re.sub(r"[^\w.\- ]", "_", f.filename)[:120]
+        post = storage.presign_post(key, s.max_upload_bytes)
+        targets.append(S.UploadTarget(url=post["url"], fields=post["fields"], key=key))
+    return S.UploadGrant(upload_id=upload_id, uploads=targets)
+
+
+@router.post("/cases/from-uploads", response_model=S.CaseCreated, status_code=202)
+def create_from_uploads(request: Request, response: Response, body: S.FromUploads,
+                        idempotency_key: str | None = Header(default=None, max_length=128),
+                        user: Principal = Depends(require("case:create")), db: Repo = Depends(get_db)):
+    """Create a case from files the browser uploaded with /cases/uploads. Only the caller's own upload prefix is read."""
+    s, storage = get_settings(), get_storage()
+    if s.storage_backend != "s3":
+        raise HTTPException(409, "direct uploads are only used with S3 storage")
+    keys = storage.list_prefix(_upload_prefix(user, body.upload_id))[: s.max_files_per_case + 1]
+    if not keys:
+        raise HTTPException(404, "no uploaded files for this upload id")
+    blobs = [(k.rsplit("/", 1)[-1].split("-", 1)[-1], storage.get(k)) for k in keys]
+    for k in keys:
+        storage.delete(k)
+    return _create(request, response, user, db, blobs, idempotency_key)
+
+
+def _create(request: Request, response: Response, user: Principal, db: Repo, blobs: list[tuple[str, bytes]],
+            idempotency_key: str | None) -> S.CaseCreated:
     try:
         case, warnings, created = svc.create_case(db, user, blobs, idempotency_key)
     except UploadError as e:
@@ -111,24 +169,18 @@ async def create_case(request: Request, response: Response, files: list[UploadFi
 
 @router.get("/cases", response_model=list[S.CaseSummary])
 def list_cases(status: str | None = None, decision: str | None = None, limit: int = Query(50, le=200),
-               offset: int = 0, user: Principal = Depends(require("case:read")), db: Session = Depends(get_db)):
-    q = select(Case).order_by(Case.created_at.desc())
-    if user.role == Role.SUBMITTER:
-        q = q.where(Case.submitted_by == user.username)
-    if status:
-        q = q.where(Case.status == status.upper())
-    if decision:
-        q = q.where(func.coalesce(Case.final_decision, Case.ai_decision) == decision.upper())
-    cases = db.execute(q.limit(limit).offset(offset)).scalars().all()
-    pending = set(db.execute(select(Override.case_id).where(Override.status == "PENDING_APPROVAL")).scalars())
+               offset: int = 0, user: Principal = Depends(require("case:read")), db: Repo = Depends(get_db)):
+    cases = db.list_cases(submitted_by=user.username if user.role == Role.SUBMITTER else None, status=status, decision=decision,
+                          limit=limit, offset=offset)
+    pending = db.case_ids_with_override_status("PENDING_APPROVAL")
     return [summary(c, c.id in pending) for c in cases]
 
 
 @router.get("/cases/{case_id}", response_model=S.CaseDetail)
-def case_detail(case_id: str, user: Principal = Depends(require("case:read")), db: Session = Depends(get_db)):
+def case_detail(case_id: str, user: Principal = Depends(require("case:read")), db: Repo = Depends(get_db)):
     c = get_case(db, user, case_id)
-    runs = db.execute(select(AgentRunRow).where(AgentRunRow.case_id == c.id).order_by(AgentRunRow.id)).scalars().all()
-    ovs = db.execute(select(Override).where(Override.case_id == c.id).order_by(Override.id)).scalars().all()
+    runs = db.list_agent_runs(c.id)
+    ovs = db.list_overrides(c.id)
     base = summary(c, any(o.status == "PENDING_APPROVAL" for o in ovs)).model_dump()
     return S.CaseDetail(
         **base, decision=CaseDecision.model_validate(c.decision) if c.decision else None,
@@ -141,7 +193,7 @@ def case_detail(case_id: str, user: Principal = Depends(require("case:read")), d
 
 @router.get("/cases/{case_id}/documents/{doc_id}/image")
 def document_image(case_id: str, doc_id: str, user: Principal = Depends(require("case:read")),
-                   db: Session = Depends(get_db)):
+                   db: Repo = Depends(get_db)):
     c = get_case(db, user, case_id)
     d = next((x for x in c.documents if x.doc_id == doc_id), None)
     if d is None:
@@ -151,16 +203,31 @@ def document_image(case_id: str, doc_id: str, user: Principal = Depends(require(
                     headers={"Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff"})
 
 
+@router.get("/cases/{case_id}/documents/{doc_id}/ela")
+def document_ela(case_id: str, doc_id: str, user: Principal = Depends(require("case:read")), db: Repo = Depends(get_db)):
+    """Error Level Analysis heatmap for a JPEG document (computed on demand; other file types have no compression history)."""
+    from medishield.forensics import ela
+
+    c = get_case(db, user, case_id)
+    d = next((x for x in c.documents if x.doc_id == doc_id), None)
+    if d is None:
+        raise HTTPException(404, "document not found")
+    res = ela.analyse(get_storage().get(d.storage_key))
+    if not res.applicable or res.heatmap_png is None:
+        raise HTTPException(404, "no ELA for this file type: only JPEG files carry compression history")
+    audit.append(db, user.username, "document_viewed", c.id, {"doc_id": doc_id, "view": "ela"})
+    return Response(res.heatmap_png, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
+
+
 def _events_after(case_id: str, last: int) -> tuple[list[S.EventOut], str | None]:
-    with session_scope() as db:
-        rows = db.execute(select(CaseEvent).where(CaseEvent.case_id == case_id, CaseEvent.id > last)
-                          .order_by(CaseEvent.id)).scalars().all()
-        case = db.get(Case, case_id)
+    with repo_scope() as db:
+        rows = db.events_after(case_id, last)
+        case = db.get_case(case_id)
         return [S.EventOut.model_validate(r, from_attributes=True) for r in rows], (case.status if case else None)
 
 
 @router.get("/cases/{case_id}/events", response_model=list[S.EventOut])
-def case_events(case_id: str, user: Principal = Depends(require("case:read")), db: Session = Depends(get_db)):
+def case_events(case_id: str, user: Principal = Depends(require("case:read")), db: Repo = Depends(get_db)):
     get_case(db, user, case_id)
     return _events_after(case_id, 0)[0]
 
@@ -185,7 +252,7 @@ async def _event_stream(case_id: str, poll: float = 0.4, max_seconds: float = 90
 async def case_stream(case_id: str, user: Principal = Depends(stream_user)):
     """Server-Sent Events fallback for environments that block WebSockets."""
     def check():
-        with session_scope() as db:
+        with repo_scope() as db:
             get_case(db, user, case_id)
     await asyncio.to_thread(check)
 
@@ -202,7 +269,7 @@ async def case_ws(websocket: WebSocket, case_id: str):
         user = principal_from_token(websocket.query_params.get("token", ""))
 
         def check():
-            with session_scope() as db:
+            with repo_scope() as db:
                 get_case(db, user, case_id)
         await asyncio.to_thread(check)
     except HTTPException:

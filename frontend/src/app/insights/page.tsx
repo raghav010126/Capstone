@@ -6,7 +6,7 @@ import { CircleCheck, CircleDashed, Clock, Coins, PiggyBank, Timer } from "lucid
 import { api, money } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { AppShell } from "@/components/app-shell"
-import { ChartCard, ConfusionMatrix, HBarChart, type Bar } from "@/components/charts"
+import { ChartCard, ConfusionMatrix, HBarChart, ReliabilityChart, type Bar, type RelBin } from "@/components/charts"
 import { Kpi } from "@/components/kpi"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -22,8 +22,11 @@ type EvalResult = {
   cases: { accuracy: number; n: number }
   fraud: { detected: Record<string, string>; false_positive_docs: string[] }
   edge_cases: Record<string, string>
+  calibration?: { fitted_on_this_split: boolean; all: CalSummary; visible: CalSummary }
   ops: { cases: number; docs: number; cache_hits: number; case_latency_s: { p50: number; p95: number }; cold_cost_per_case_usd: number; cold_cost_per_doc_usd: number; cold_cost_by_agent: Record<string, number>; llm_calls: number; retries_by_agent: Record<string, number>; mean_grounding_rate: number }
 }
+type CalBlock = { ece: number; brier: number; bins: RelBin[] }
+type CalSummary = { n: number; accuracy: number; raw: CalBlock; calibrated?: CalBlock }
 type Summary = { business_impact: { baseline_annual_cost_usd: number; baseline_cost_per_document_usd: number; projected_annual_cost_usd: number; projected_annual_savings_usd: number; assumptions: string }; stp_rate: number | null; decided: number }
 
 const TYPE = (t: string) => t.replace("_", " ").toLowerCase().replace(/^./, (c) => c.toUpperCase())
@@ -138,6 +141,17 @@ export default function InsightsPage() {
               />
             </ChartCard>
           </div>
+
+          {r.calibration && (
+            <ChartCard
+              title="Does the confidence mean what it says?"
+              subtitle={`Each point is a group of documents with similar reported confidence: how often those decisions were right. ECE ${r.calibration.all.raw.ece.toFixed(3)} raw${r.calibration.all.calibrated ? ` → ${r.calibration.all.calibrated.ece.toFixed(3)} calibrated` : ""} · Brier ${r.calibration.all.raw.brier.toFixed(3)}${r.calibration.all.calibrated ? ` → ${r.calibration.all.calibrated.brier.toFixed(3)}` : ""}${r.calibration.fitted_on_this_split ? " (calibrator fitted on this split, so the calibrated numbers are in-sample)" : " (calibrator fitted on the dev split only)"}`}
+            >
+              <div className="mx-auto max-w-xl">
+                <ReliabilityChart raw={r.calibration.all.raw.bins} calibrated={r.calibration.all.calibrated?.bins} />
+              </div>
+            </ChartCard>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <ChartCard title="Extraction accuracy by document type" subtitle={`All ${Object.keys(r.extraction.per_field).length} scored fields: ${pct1(r.extraction.all_fields)} correct`}>

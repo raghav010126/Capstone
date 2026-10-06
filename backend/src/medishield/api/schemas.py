@@ -117,6 +117,36 @@ class CaseDetail(CaseSummary):
     warnings: list[str] = []
 
 
+class UploadMode(BaseModel):
+    mode: str                       # "direct" (multipart to the API) | "presigned" (browser -> S3, then /cases/from-uploads)
+    max_file_bytes: int
+    max_files: int
+
+
+class UploadFileSpec(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    size: int = Field(gt=0)
+
+
+class UploadRequest(BaseModel):
+    files: list[UploadFileSpec] = Field(min_length=1)
+
+
+class UploadTarget(BaseModel):
+    url: str
+    fields: dict[str, str]
+    key: str
+
+
+class UploadGrant(BaseModel):
+    upload_id: str
+    uploads: list[UploadTarget]
+
+
+class FromUploads(BaseModel):
+    upload_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+
+
 class CaseCreated(BaseModel):
     case_id: str
     status: str
@@ -180,3 +210,42 @@ class PolicyOut(BaseModel):
     uploaded_by: str
     error: str | None
     created_at: datetime
+
+
+class ChatRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    conversation_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{8,100}$")
+
+
+class ChatSource(BaseModel):
+    n: int
+    kind: str
+    title: str
+    url: str | None = None
+    page: int | None = None
+    cited: bool = False
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    route: str
+    blocked: bool
+    role: str
+    conversation_id: str
+    router: str = ""
+    sql: str | None = None
+    sources: list[ChatSource] = []
+    accessible: list[str] = []
+    restricted: list[str] = []
+
+
+class ChatSourceInfo(BaseModel):
+    id: str
+    label: str
+
+
+class ChatScope(BaseModel):
+    role: str
+    accessible: list[ChatSourceInfo]
+    restricted: list[ChatSourceInfo]
+    examples: list[str]

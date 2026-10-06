@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Maximize2, Minus, Plus, ScanSearch } from "lucide-react"
+import { Flame, Maximize2, Minus, Plus, ScanSearch } from "lucide-react"
 import { useAuthedImage } from "@/hooks/use-authed-image"
 import type { DocumentOut } from "@/lib/api"
 import { cn } from "@/lib/utils"
@@ -14,7 +14,12 @@ import { Skeleton } from "@/components/ui/skeleton"
  * highlights its box here and scrolls it into view, and clicking a box selects the field.
  */
 export function DocumentViewer({ caseId, doc, activeField, onSelectField }: { caseId: string; doc: DocumentOut; activeField: string | null; onSelectField: (name: string | null) => void }) {
-  const { url, error } = useAuthedImage(`/cases/${caseId}/documents/${doc.doc_id}/image`)
+  const [ela, setEla] = useState(false)
+  const isJpeg = doc.media_type === "image/jpeg"
+  const { url: pageUrl, error: pageError } = useAuthedImage(`/cases/${caseId}/documents/${doc.doc_id}/image`)
+  const { url: elaUrl } = useAuthedImage(ela && isJpeg ? `/cases/${caseId}/documents/${doc.doc_id}/ela` : null)
+  const url = ela && elaUrl ? elaUrl : pageUrl
+  const error = pageError
   const [zoom, setZoom] = useState(1)
   const [boxes, setBoxes] = useState(true)
   const activeRef = useRef<HTMLButtonElement | null>(null)
@@ -36,6 +41,11 @@ export function DocumentViewer({ caseId, doc, activeField, onSelectField }: { ca
           <Button variant={boxes ? "secondary" : "ghost"} size="sm" onClick={() => setBoxes((b) => !b)} aria-pressed={boxes}>
             <ScanSearch /> Evidence
           </Button>
+          {isJpeg && (
+            <Button variant={ela ? "secondary" : "ghost"} size="sm" onClick={() => setEla((v) => !v)} aria-pressed={ela} title="Error Level Analysis heatmap: regions saved with a different JPEG history look different. Advisory only.">
+              <Flame /> ELA
+            </Button>
+          )}
           <Button variant="outline" size="icon-sm" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}>
             <Minus />
           </Button>
@@ -55,7 +65,7 @@ export function DocumentViewer({ caseId, doc, activeField, onSelectField }: { ca
           <div className="relative mx-auto bg-white shadow-sm" style={{ width: `${zoom * 100}%` }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} alt={`Scanned ${doc.doc_type?.toLowerCase().replace("_", " ") ?? "document"}`} className="block w-full select-none" draggable={false} />
-            {boxes &&
+            {boxes && !ela &&
               located.map((f) => {
                 const [x0, y0, x1, y1] = f.box as number[]
                 const active = f.name === activeField

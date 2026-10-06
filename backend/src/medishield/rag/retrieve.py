@@ -19,7 +19,7 @@ from medishield.rag.ingest import Chunk, PolicyIndex, load_or_ingest, policy_pdf
 
 DENSE_MODEL = "BAAI/bge-small-en-v1.5"
 SPARSE_MODEL = "Qdrant/bm25"
-RERANK_MODEL = "BAAI/bge-reranker-base"
+RERANK_MODEL = "jinaai/jina-reranker-v1-turbo-en"   # 0.15 GB; beat bge-reranker-base (1.04 GB) on the gold set, see docs/eval_results/reranker.json
 COLLECTION = "policies"
 _CODE_RE = re.compile(r"[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)+")
 _lock = threading.Lock()
@@ -40,7 +40,7 @@ class Hit:
 
 
 class PolicyStore:
-    def __init__(self, indexes: list[PolicyIndex]):
+    def __init__(self, indexes: list[PolicyIndex], rerank_model: str | None = None):
         from fastembed import SparseTextEmbedding, TextEmbedding
         from fastembed.rerank.cross_encoder import TextCrossEncoder
 
@@ -49,7 +49,7 @@ class PolicyStore:
         self.chunks = {c.chunk_id: c for i in indexes for c in i.chunks}
         self.dense = TextEmbedding(DENSE_MODEL, cache_dir=cache)
         self.sparse = SparseTextEmbedding(SPARSE_MODEL, cache_dir=cache)
-        self.reranker = TextCrossEncoder(RERANK_MODEL, cache_dir=cache)
+        self.reranker = TextCrossEncoder(rerank_model or RERANK_MODEL, cache_dir=cache)
         self.client = QdrantClient(":memory:")
         dim = len(next(iter(self.dense.embed(["dim"]))))
         self.client.create_collection(

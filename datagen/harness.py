@@ -253,7 +253,7 @@ def run_script(name: str, cwd: Path, seed: int, pixel_seed: int, env: dict[str, 
     src = (OFFICIAL / name).read_text(encoding="utf-8")
     if seed != OFFICIAL_SEED and name == "generate_docs.py":
         pattern = rf"^rng = random\.Random\({OFFICIAL_SEED}\)$"
-        src, n = re.subn(pattern, f"rng = random.Random({seed})", src, flags=re.M)
+        src, n = re.subn(pattern, f"rng = random.Random({seed})", src, flags=re.MULTILINE)
         assert n == 1, "content-seed line not found exactly once"
     head, sep, main = src.partition('\nif __name__ == "__main__":\n')
     ns: dict = {"__name__": "__harness__", "__file__": str(OFFICIAL / name)}

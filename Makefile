@@ -23,7 +23,7 @@ test:
 gold:               ## retrieval gold set, built from the policy text
 	$(PY) python eval/build_retrieval_gold.py data/official
 
-eval:               ## dev split (prompt iteration happens here only) -> docs/EVAL_REPORT.md
+eval:               ## SPLIT=dev|heldout|all|test20 DATASET=data/official|data/corrected|data/seed7|... -> docs/eval_results/*.json
 	$(PY) python eval/run_eval.py --split $(or $(SPLIT),dev) --dataset $(or $(DATASET),data/official)
 
 lint:
@@ -38,6 +38,9 @@ worker:             ## standalone queue worker (run the API with MEDISHIELD_WORK
 
 test-fast:          ## everything except the real-pipeline integration tests
 	$(PY) pytest -q -m "not integration"
+
+test-dynamo:        ## the same suite against DynamoDB (moto, no AWS account needed)
+	MEDISHIELD_TEST_DB=dynamodb $(PY) pytest -q -m "not integration"
 
 .PHONY: openapi web-types web web-build
 openapi:            ## dump the API's OpenAPI schema for the frontend
@@ -58,3 +61,19 @@ web-start:          ## production build of the UI on :3001 (what gets deployed)
 
 e2e:                ## full UI flow in Chrome against the production build (needs `make web-start`, and `make api` with MEDISHIELD_LLM_OFFLINE=1 CORS_ORIGINS=http://localhost:3001)
 	cd frontend && WEB=http://localhost:3001 PATH=$$HOME/.local/node/bin:$$PATH node e2e/flow.mjs /tmp/medishield-e2e
+
+.PHONY: report forensics redteam multilingual
+report:             ## assemble docs/EVAL_REPORT.md from docs/eval_results/*.json
+	$(PY) python eval/make_report.py
+
+forensics:          ## tamper-detector evaluation (no model calls)
+	$(PY) python eval/forensics_eval.py
+
+multilingual:       ## generate the Spanish / Hindi dataset
+	$(PY) python datagen/multilingual.py data/official data/multilingual
+
+redteam:            ## build adversarial documents, run them, print the verdict (a few dollars)
+	$(PY) python datagen/redteam.py data/official data/redteam
+	$(PY) python eval/run_eval.py --dataset data/redteam --split all
+	$(PY) python eval/redteam_report.py
+	$(PY) python eval/redteam_policy.py

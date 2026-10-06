@@ -6,7 +6,7 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -34,8 +34,33 @@ def get_engine() -> Engine:
                     cur.execute("PRAGMA foreign_keys=ON")
                     cur.close()
             Base.metadata.create_all(_engine)
+            add_missing_columns(_engine)
             _factory = sessionmaker(_engine, expire_on_commit=False)
         return _engine
+
+
+def add_missing_columns(engine: Engine) -> list[str]:
+    """Additive schema upgrade: a database created by an older version gets the columns added since (with their defaults).
+
+    Only ever adds nullable-or-defaulted columns; it never drops, renames or rewrites data. Larger changes would need a real
+    migration tool (Alembic)."""
+    added = []
+    insp = inspect(engine)
+    for table in Base.metadata.sorted_tables:
+        if not insp.has_table(table.name):
+            continue
+        have = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in have:
+                continue
+            ddl = col.type.compile(dialect=engine.dialect)
+            default = col.default.arg if col.default is not None and not col.default.is_callable else None
+            clause = f" DEFAULT {default!r}" if isinstance(default, (int, float, str)) and not isinstance(default, bool) else (
+                f" DEFAULT {int(default)}" if isinstance(default, bool) else "")
+            with engine.begin() as conn:
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl}{clause}'))
+            added.append(f"{table.name}.{col.name}")
+    return added
 
 
 def reset_engine() -> None:

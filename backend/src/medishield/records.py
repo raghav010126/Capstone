@@ -6,6 +6,7 @@ Checkpoint 2 loads the JSON exported by ``datagen/records.py``; checkpoint 3 mov
 from __future__ import annotations
 
 import json
+import re
 import statistics
 import threading
 from collections import defaultdict
@@ -42,6 +43,33 @@ def name_score(a: str | None, b: str | None) -> float:
     if not a or not b:
         return 0.0
     return float(fuzz.token_sort_ratio(a.lower().replace(".", ""), b.lower().replace(".", "")))
+
+
+_TITLES = {"dr", "mr", "mrs", "ms", "md", "jr", "sr", "ii", "iii", "iv"}
+
+
+def _name_tokens(name: str) -> list[str]:
+    toks = re.findall(r"[^\W\d_]+", name.lower().replace(".", ""))
+    return [t for t in toks if len(t) > 1 and t not in _TITLES]       # initials and titles are legitimately missing or extra
+
+
+def name_variant(a: str | None, b: str | None) -> str | None:
+    """Describe a near-miss between two names ("Jessica Jackson" vs "Jessica Jackscn"): every word of ``a`` is either present in
+    ``b`` or within a few letters of one of its words, and at least one is not an exact match. Different people have different
+    words; a one-letter variant is how an altered or mistyped name looks. None when the names agree or genuinely differ."""
+    if not a or not b:
+        return None
+    ta, tb = _name_tokens(a), _name_tokens(b)
+    if not ta or not tb:
+        return None
+    off = [t for t in ta if t not in tb]
+    if not off or len(off) > 2:
+        return None
+    for t in off:
+        best = max(tb, key=lambda u: fuzz.ratio(t, u))
+        if fuzz.ratio(t, best) < 72 or abs(len(t) - len(best)) > 2 or t[0] != best[0]:
+            return None
+    return ", ".join(f"'{t}' vs '{max(tb, key=lambda u: fuzz.ratio(t, u))}'" for t in off)
 
 
 @dataclass

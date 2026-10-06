@@ -28,6 +28,7 @@ import anthropic
 from PIL import Image
 from pydantic import BaseModel, ValidationError
 
+from medishield import observability
 from medishield.config import get_settings
 from medishield.llm.cost import Usage, cost_usd, ledger
 from medishield.llm.routing import Route, route
@@ -190,7 +191,22 @@ def _call_api(r: Route, system: str, blocks: list[dict], schema: dict) -> tuple[
 
 def structured(step: str, system: str, parts: list[str | ImagePart], out: type[T],
                model: str | None = None, tag: str = "") -> LLMResult[T]:
-    """One schema-constrained call for ``step`` (see routing.ROUTES)."""
+    """One schema-constrained call for ``step`` (see routing.ROUTES), traced when LangSmith is configured."""
+    r = route(step)
+    inputs = {"system": system, "messages": [p if isinstance(p, str) else {"type": "image"} for p in parts],
+              "schema": out.__name__}
+    with observability.llm_span(step, model or r.model, r.effort, inputs) as finish:
+        res = _structured(step, system, parts, out, model, tag)
+        finish({"parsed": res.parsed.model_dump(mode="json"),
+                "usage_metadata": {"input_tokens": res.usage.input_tokens, "output_tokens": res.usage.output_tokens,
+                                   "total_tokens": res.usage.input_tokens + res.usage.output_tokens}},
+               cached=res.cached, cost_usd=round(res.cost_usd, 6), cold_cost_usd=round(res.cold_cost_usd, 6),
+               latency_ms=round(res.latency_ms), served_model=res.model)
+        return res
+
+
+def _structured(step: str, system: str, parts: list[str | ImagePart], out: type[T],
+                model: str | None = None, tag: str = "") -> LLMResult[T]:
     s = get_settings()
     r = route(step)
     if model:

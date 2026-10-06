@@ -39,12 +39,48 @@ def tasks() -> dict:
             "ingest_policy": h.task(retries=0, name="ingest_policy")(ingest_policy)}
 
 
+def _send_sqs(task: str, arg: str | int) -> None:
+    import json
+
+    import boto3
+
+    s = get_settings()
+    boto3.client("sqs", region_name=s.aws_region).send_message(QueueUrl=s.sqs_queue_url,
+                                                                MessageBody=json.dumps({"task": task, "arg": arg}))
+
+
+def _invoke_agentcore(task: str, **arg) -> None:
+    """Hand the job to the AgentCore pipeline runtime. It answers at once and keeps working in its own session."""
+    import json
+    import uuid
+
+    import boto3
+
+    s = get_settings()
+    resp = boto3.client("bedrock-agentcore", region_name=s.aws_region).invoke_agent_runtime(
+        agentRuntimeArn=s.pipeline_runtime_arn, runtimeSessionId=f"{task}-{uuid.uuid4().hex}",   # 33+ chars, one session per job
+        payload=json.dumps({"task": task, **arg}).encode(), contentType="application/json", accept="application/json")
+    body = json.loads(b"".join(resp["response"]).decode() or "{}")
+    if not body.get("accepted"):
+        raise RuntimeError(f"pipeline runtime did not accept {task}: {body}")
+
+
 def enqueue_case(case_id: str) -> None:
-    tasks()["process_case"](case_id)
+    if get_settings().queue_backend == "agentcore":
+        _invoke_agentcore("process_case", case_id=case_id)
+    elif get_settings().queue_backend == "sqs":
+        _send_sqs("process_case", case_id)
+    else:
+        tasks()["process_case"](case_id)
 
 
 def enqueue_policy(policy_id: int) -> None:
-    tasks()["ingest_policy"](policy_id)
+    if get_settings().queue_backend == "agentcore":
+        _invoke_agentcore("ingest_policy", policy_id=policy_id)
+    elif get_settings().queue_backend == "sqs":
+        _send_sqs("ingest_policy", policy_id)
+    else:
+        tasks()["ingest_policy"](policy_id)
 
 
 class Worker(threading.Thread):

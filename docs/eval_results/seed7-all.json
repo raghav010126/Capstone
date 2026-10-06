@@ -1,0 +1,403 @@
+{
+ "split": "all",
+ "dataset": "seed7",
+ "timestamp": "2026-10-05T15:54:26",
+ "classification": {
+  "accuracy": 1.0,
+  "n": 155,
+  "wrong": []
+ },
+ "extraction": {
+  "rubric_claim_completeness": 1.0,
+  "rubric_n": 183,
+  "all_fields": 0.9854,
+  "per_type": {
+   "ID_DOCUMENT": 0.8444,
+   "CLAIM_FORM": 0.9973,
+   "DISCHARGE_SUMMARY": 1.0,
+   "PRESCRIPTION": 1.0,
+   "POLICY_AMENDMENT": 1.0
+  },
+  "per_field": {
+   "CLAIM_FORM.attending_physician": [
+    1.0,
+    28
+   ],
+   "CLAIM_FORM.billing_provider": [
+    1.0,
+    31
+   ],
+   "CLAIM_FORM.claim_number": [
+    1.0,
+    31
+   ],
+   "CLAIM_FORM.cpt_codes": [
+    1.0,
+    31
+   ],
+   "CLAIM_FORM.icd_codes": [
+    1.0,
+    31
+   ],
+   "CLAIM_FORM.line_charges": [
+    1.0,
+    31
+   ],
+   "CLAIM_FORM.patient_dob": [
+    0.9677,
+    31
+   ],
+   "CLAIM_FORM.patient_name": [
+    1.0,
+    31
+   ],
+   "CLAIM_FORM.policy_number": [
+    1.0,
+    31
+   ],
+   "CLAIM_FORM.provider_npi": [
+    1.0,
+    28
+   ],
+   "CLAIM_FORM.service_date": [
+    1.0,
+    31
+   ],
+   "CLAIM_FORM.total_charge": [
+    1.0,
+    31
+   ],
+   "DISCHARGE_SUMMARY.admit_date": [
+    1.0,
+    30
+   ],
+   "DISCHARGE_SUMMARY.attending_physician": [
+    1.0,
+    30
+   ],
+   "DISCHARGE_SUMMARY.discharge_date": [
+    1.0,
+    30
+   ],
+   "DISCHARGE_SUMMARY.facility": [
+    1.0,
+    30
+   ],
+   "DISCHARGE_SUMMARY.patient_dob": [
+    1.0,
+    30
+   ],
+   "DISCHARGE_SUMMARY.patient_name": [
+    1.0,
+    30
+   ],
+   "DISCHARGE_SUMMARY.primary_icd": [
+    1.0,
+    30
+   ],
+   "ID_DOCUMENT.dob": [
+    1.0,
+    24
+   ],
+   "ID_DOCUMENT.expiry_date": [
+    0.6667,
+    24
+   ],
+   "ID_DOCUMENT.name_on_id": [
+    1.0,
+    30
+   ],
+   "ID_DOCUMENT.policy_number": [
+    0.5,
+    12
+   ],
+   "POLICY_AMENDMENT.amendment_type": [
+    1.0,
+    30
+   ],
+   "POLICY_AMENDMENT.dob": [
+    1.0,
+    30
+   ],
+   "POLICY_AMENDMENT.effective_date": [
+    1.0,
+    30
+   ],
+   "POLICY_AMENDMENT.policy_number": [
+    1.0,
+    30
+   ],
+   "POLICY_AMENDMENT.policyholder": [
+    1.0,
+    30
+   ],
+   "PRESCRIPTION.dea_number": [
+    1.0,
+    29
+   ],
+   "PRESCRIPTION.drugs": [
+    1.0,
+    29
+   ],
+   "PRESCRIPTION.patient_dob": [
+    1.0,
+    30
+   ],
+   "PRESCRIPTION.patient_name": [
+    1.0,
+    30
+   ],
+   "PRESCRIPTION.prescriber": [
+    1.0,
+    30
+   ],
+   "PRESCRIPTION.prescriber_npi": [
+    1.0,
+    30
+   ],
+   "PRESCRIPTION.rx_date": [
+    1.0,
+    30
+   ]
+  },
+  "misses": [
+   "id_PT_51175.policy_number: gt='MED-GLD-2728987' got=None",
+   "id_PT_83148.expiry_date: gt='2029-10-02' got=None",
+   "id_PT_23393.policy_number: gt='MED-GLD-2179699' got=None",
+   "id_PT_39234.expiry_date: gt='2026-01-20' got=None",
+   "claim_PT_36787.patient_dob: gt='07/24/1960' got=None",
+   "id_PT_95964.expiry_date: gt='2025-02-04' got=None",
+   "id_PT_18094.policy_number: gt='MED-GLD-9782983' got=None",
+   "id_PT_83336.expiry_date: gt='2029-08-10' got=None",
+   "id_PT_49977.policy_number: gt='MED-GLD-5493940' got=None",
+   "id_PT_61522.expiry_date: gt='2029-09-15' got='2028-09-15'",
+   "id_PT_72109.policy_number: gt='MED-GLD-1316094' got=None",
+   "id_PT_73231.expiry_date: gt='2029-01-19' got=None",
+   "id_PT_55083.expiry_date: gt='2025-06-18' got=None",
+   "id_PT_55044.policy_number: gt='MED-GLD-4413086' got=None",
+   "id_PT_41992.expiry_date: gt='2029-04-16' got=None"
+  ]
+ },
+ "retrieval": {
+  "recall@3": 1.0,
+  "mrr": 0.9943,
+  "queries": 87,
+  "misses": []
+ },
+ "decision": {
+  "accuracy_all": 0.9613,
+  "n_all": 155,
+  "accuracy_visible": 1.0,
+  "n_visible": 149,
+  "by_type": {
+   "ID_DOCUMENT": 0.8667,
+   "CLAIM_FORM": 0.9355,
+   "DISCHARGE_SUMMARY": 1.0,
+   "PRESCRIPTION": 1.0,
+   "POLICY_AMENDMENT": 1.0,
+   "UNKNOWN": 1.0
+  },
+  "confusion": {
+   "APPROVE->APPROVE": 122,
+   "ESCALATE->APPROVE": 2,
+   "ESCALATE->ESCALATE": 10,
+   "REJECT->APPROVE": 4,
+   "REJECT->REJECT": 17
+  },
+  "wrong": [
+   "claim_PT_51175: expected ESCALATE got APPROVE (R4_default) [label not visible] - fraud signal llm:discharge_date_mismatch (w=0.2): Claim lists discharge date 2025-02-21, but discharge_PT_51175 records discharge on 2025-02-20 (rx_PT_51175 is also dated 2025-02-20). This could overstate the length of s",
+   "id_PT_56591: expected ESCALATE got APPROVE (R4_default) [label not visible] - all checks passed",
+   "id_PT_83336: expected REJECT got APPROVE (R4_default) [label not visible] - all checks passed",
+   "id_PT_72109: expected REJECT got APPROVE (R4_default) [label not visible] - all checks passed",
+   "id_PT_45213: expected REJECT got APPROVE (R4_default) [label not visible] - all checks passed",
+   "claim_PT_45523: expected REJECT got APPROVE (R4_default) [label not visible] - fraud signal llm:claim_number_year_mismatch (w=0.1): Claim number UB04-CLM-2024-00028 contains the year 2024, but all service and admission dates are in 2025."
+  ]
+ },
+ "cases": {
+  "accuracy": 0.8235,
+  "n": 34,
+  "wrong": [
+   "C_001: expected ESCALATE got APPROVE",
+   "C_003: expected ESCALATE got APPROVE",
+   "C_012: expected REJECT got APPROVE",
+   "C_021: expected REJECT got APPROVE",
+   "C_023: expected REJECT got APPROVE",
+   "C_028: expected REJECT got APPROVE"
+  ]
+ },
+ "fraud": {
+  "detected": {
+   "amount_under_10k (not visible)": "0/1",
+   "date_conflict": "1/1",
+   "duplicate_claim": "1/1",
+   "name_mismatch (not visible)": "0/1",
+   "proc_diag_mismatch": "1/1",
+   "readmission_30d": "1/1"
+  },
+  "false_positive_docs": []
+ },
+ "edge_cases": {
+  "blurred_scan": "2/2",
+  "expired_id": "5/5",
+  "expiring_soon_id": "5/5",
+  "missing_fields": "7/7",
+  "missing_fields (not visible)": "0/1",
+  "tampered_id (not visible)": "0/3",
+  "uncovered_procedure": "5/5",
+  "unknown_document": "4/4"
+ },
+ "ops": {
+  "cases": 34,
+  "docs": 155,
+  "case_latency_s": {
+   "p50": 7.9,
+   "p95": 10.5,
+   "max": 13.95980758301448
+  },
+  "cost_usd_new_calls": 0.2374,
+  "cold_cost_usd": 4.1421,
+  "cold_cost_per_case_usd": 0.1218,
+  "cold_cost_per_doc_usd": 0.0267,
+  "llm_calls": 267,
+  "cache_hits": 226,
+  "retries_by_agent": {
+   "extractor": 8,
+   "classifier": 3
+  },
+  "cold_cost_by_agent": {
+   "preprocess": 0.0,
+   "classifier": 0.0656,
+   "extractor": 1.7701,
+   "kyc_visual": 0.0,
+   "claims": 0.0,
+   "policy": 1.2113,
+   "kyc": 0.0,
+   "fraud": 0.8431,
+   "justify": 0.2519
+  },
+  "mean_grounding_rate": 0.985,
+  "mean_support_rate": 0.9934
+ },
+ "by_language": {},
+ "calibration": {
+  "all": {
+   "n": 155,
+   "accuracy": 0.9613,
+   "raw": {
+    "ece": 0.0878,
+    "brier": 0.0561,
+    "bins": [
+     {
+      "lo": 0.2,
+      "hi": 0.3,
+      "n": 2,
+      "mean_conf": 0.3,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.4,
+      "hi": 0.5,
+      "n": 2,
+      "mean_conf": 0.45,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 9,
+      "mean_conf": 0.7467,
+      "accuracy": 0.8889
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 54,
+      "mean_conf": 0.8089,
+      "accuracy": 0.963
+     },
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 88,
+      "mean_conf": 0.983,
+      "accuracy": 0.9659
+     }
+    ]
+   },
+   "calibrated": {
+    "ece": 0.0155,
+    "brier": 0.0368,
+    "bins": [
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 155,
+      "mean_conf": 0.9768,
+      "accuracy": 0.9613
+     }
+    ]
+   }
+  },
+  "visible": {
+   "n": 149,
+   "accuracy": 1.0,
+   "raw": {
+    "ece": 0.1061,
+    "brier": 0.0276,
+    "bins": [
+     {
+      "lo": 0.2,
+      "hi": 0.3,
+      "n": 2,
+      "mean_conf": 0.3,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.4,
+      "hi": 0.5,
+      "n": 2,
+      "mean_conf": 0.45,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 8,
+      "mean_conf": 0.748,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 52,
+      "mean_conf": 0.8086,
+      "accuracy": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 85,
+      "mean_conf": 0.9842,
+      "accuracy": 1.0
+     }
+    ]
+   },
+   "calibrated": {
+    "ece": 0.0227,
+    "brier": 0.0009,
+    "bins": [
+     {
+      "lo": 0.9,
+      "hi": 1.0,
+      "n": 149,
+      "mean_conf": 0.9773,
+      "accuracy": 1.0
+     }
+    ]
+   }
+  },
+  "fitted_on_this_split": false
+ },
+ "spend_this_run_usd": 0.2374,
+ "graph_seconds": 257.1
+}

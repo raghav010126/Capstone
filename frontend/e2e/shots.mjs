@@ -68,7 +68,7 @@ for (const step of steps) {
     const cases = await casesBy("reviewer", "reviewer-demo")
     const c = cases.find((x) => x.status === "IN_REVIEW" && x.total_amount > 16000 && x.total_amount < 17000) ?? cases.find((x) => x.status === "IN_REVIEW")
     await signIn("reviewer")
-    await page.goto(`${WEB}/cases/${c.id}`)
+    await page.goto(`${WEB}/cases/view?id=${c.id}`)
     await page.waitForSelector("text=Extracted fields")
     await page.waitForTimeout(2500)
     await page.screenshot({ path: `${out}/03-case-review.png`, fullPage: true })

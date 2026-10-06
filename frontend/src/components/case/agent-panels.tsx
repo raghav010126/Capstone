@@ -87,6 +87,12 @@ export function AgentPanels({ doc, detail }: { doc: DocumentOut; detail: CaseDet
       {c && (
         <Panel title="Classifier" icon={<Tags className="size-4" />} run={runs.classifier} summary={`${doc.doc_type ?? ""} · ${pct(c.confidence)}`}>
           <KV k="Document type">{doc.doc_type}</KV>
+          {c.language && c.language !== "en" && (
+            <KV k="Language">
+              {({ es: "Spanish", hi: "Hindi" } as Record<string, string>)[c.language] ?? c.language}
+              <span className="ml-2 text-xs text-muted-foreground">read in its own script; dates converted from day/month/year; values normalised to English</span>
+            </KV>
+          )}
           <KV k="Evidence confidence">
             {pct(c.confidence)} <span className="text-xs text-muted-foreground">(vision model {pct(c.llm_self_confidence)} self-reported, not used)</span>
           </KV>
@@ -118,6 +124,25 @@ export function AgentPanels({ doc, detail }: { doc: DocumentOut; detail: CaseDet
             {(doc.kyc.warnings ?? []).map((f) => <Tag key={f} tone="warn">{f}</Tag>)}
           </KV>
           {doc.kyc.reference_date && <KV k="Validated on">date of service {doc.kyc.reference_date} (not today)</KV>}
+          {Object.keys(doc.kyc.forensics ?? {}).length > 0 && (
+            <KV k="Forensics">
+              {(() => {
+                const f = doc.kyc.forensics as { typography?: { flagged: boolean; detail: string }; ela?: { applicable: boolean; flagged: boolean; detail: string } }
+                return (
+                  <div className="space-y-0.5 text-xs">
+                    <div>
+                      <span className={f.typography?.flagged ? "text-escalate" : "text-approve"}>{f.typography?.flagged ? "Typography: inconsistent" : "Typography: consistent"}</span>
+                      <span className="ml-2 text-muted-foreground">{f.typography?.detail}</span>
+                    </div>
+                    <div>
+                      <span className={f.ela?.flagged ? "text-escalate" : "text-muted-foreground"}>{f.ela?.applicable ? (f.ela.flagged ? "ELA: uneven" : "ELA: even") : "ELA: n/a (not a JPEG)"}</span>
+                      {f.ela?.applicable && <span className="ml-2 text-muted-foreground">advisory · {f.ela.detail}</span>}
+                    </div>
+                  </div>
+                )
+              })()}
+            </KV>
+          )}
           {(doc.kyc.checks ?? []).map((k) => (
             <KV key={k.name} k={k.name.replace(/_/g, " ")}>
               <span className={k.passed === false ? "text-reject" : k.passed ? "text-approve" : "text-muted-foreground"}>{k.passed == null ? "n/a" : k.passed ? "pass" : "fail"}</span>

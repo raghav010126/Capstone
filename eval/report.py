@@ -10,15 +10,20 @@ def _pct(x) -> str:
 
 
 def write_report(r: dict, path: Path) -> None:
+    path.write_text("\n".join(render(r, level=1)) + "\n")
+
+
+def render(r: dict, level: int = 1) -> list[str]:
+    """Markdown for one evaluation run; ``level`` is the heading depth of its title."""
     ex, rt, dc, cs, op = r["extraction"], r["retrieval"], r["decision"], r["cases"], r["ops"]
     L: list[str] = []
     w = L.append
-    w(f"# Evaluation report: {r['dataset']} / {r['split']} split")
+    w(f"{'#' * level} {r['dataset']} / {r['split']} split")
     w("")
     w(f"_Generated {r['timestamp']} by `make eval`. Prompts are tuned on the dev split only; "
       "held-out and seed-7 numbers are reported without tuning._")
     w("")
-    w("## Rubric metrics")
+    w(f"{'#' * (level + 1)} Rubric metrics")
     w("")
     w("| Rubric criterion (weight) | Metric | Result |")
     w("|---|---|---|")
@@ -33,7 +38,7 @@ def write_report(r: dict, path: Path) -> None:
     w(f"| | ... on labels visible in the pixels | **{_pct(dc['accuracy_visible'])}** ({dc['n_visible']} docs) |")
     w(f"| | case roll-up accuracy | {_pct(cs['accuracy'])} ({cs['n']} cases) |")
     w("")
-    w("## Decisions")
+    w(f"{'#' * (level + 1)} Decisions")
     w("")
     w("Accuracy by true document type: " + ", ".join(f"{k} {_pct(v)}" for k, v in dc["by_type"].items()))
     w("")
@@ -55,7 +60,7 @@ def write_report(r: dict, path: Path) -> None:
         w("")
         w("</details>")
         w("")
-    w("## Extraction detail")
+    w(f"{'#' * (level + 1)} Extraction detail")
     w("")
     w(f"All scored fields across document types: **{_pct(ex['all_fields'])}**. By type: "
       + ", ".join(f"{k} {_pct(v)}" for k, v in ex["per_type"].items()))
@@ -73,7 +78,7 @@ def write_report(r: dict, path: Path) -> None:
         w("")
         w("</details>")
         w("")
-    w("## Retrieval detail")
+    w(f"{'#' * (level + 1)} Retrieval detail")
     w("")
     w("Gold sections come from `eval/retrieval_gold.json`, built from the policy text (not retriever output).")
     if rt["misses"]:
@@ -85,7 +90,7 @@ def write_report(r: dict, path: Path) -> None:
         w("")
         w("</details>")
     w("")
-    w("## Operations")
+    w(f"{'#' * (level + 1)} Operations")
     w("")
     w(f"- Cases: {op['cases']}, documents: {op['docs']}")
     w(f"- Case latency (cold path incl. LLM): p50 {op['case_latency_s']['p50']}s, "
@@ -98,4 +103,4 @@ def write_report(r: dict, path: Path) -> None:
     w(f"- Mean OCR grounding rate {_pct(op['mean_grounding_rate'])}; mean support rate (grounded or "
       f"corroborated by the member database) {_pct(op['mean_support_rate'])}")
     w("")
-    path.write_text("\n".join(L) + "\n")
+    return L

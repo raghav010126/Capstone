@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from medishield.api.deps import get_db
 from medishield.api.security import Principal, require
-from medishield.db.models import Case, Override
+from medishield.db.repo import Repo
 from medishield.llm import ledger
 
 router = APIRouter(tags=["ops"])
@@ -20,10 +18,12 @@ MONTHLY_DOCS = 85_000
 def eval_results(_: Principal = Depends(require("ops:read"))):
     """Published evaluation scorecards (written by ``make eval``; committed under docs/eval_results)."""
     import json
+    import os
+    from pathlib import Path
 
     from medishield.config import REPO_ROOT
 
-    d = REPO_ROOT / "docs" / "eval_results"
+    d = Path(os.environ.get("MEDISHIELD_EVAL_DIR") or REPO_ROOT / "docs" / "eval_results")
     return {p.stem: json.loads(p.read_text()) for p in sorted(d.glob("*.json"))} if d.exists() else {}
 
 
@@ -33,15 +33,15 @@ def healthz():
 
 
 @router.get("/ops/summary")
-def summary(_: Principal = Depends(require("ops:read")), db: Session = Depends(get_db)):
+def summary(_: Principal = Depends(require("ops:read")), db: Repo = Depends(get_db)):
     """KPIs for the dashboard: throughput, straight-through-processing, speed, cost and projected savings."""
-    cases = db.execute(select(Case)).scalars().all()
+    cases = db.all_cases()
     done = [c for c in cases if c.status in ("DECIDED", "IN_REVIEW", "FINALIZED")]
     by_final: dict[str, int] = {}
     for c in cases:
         key = c.status if c.status in ("RECEIVED", "PROCESSING", "FAILED") else (c.final_decision or c.ai_decision or "UNKNOWN")
         by_final[key] = by_final.get(key, 0) + 1
-    overridden = set(db.execute(select(Override.case_id).where(Override.status == "APPLIED")).scalars())
+    overridden = db.case_ids_with_override_status("APPLIED")
     stp = [c for c in done if c.ai_decision != "ESCALATE" and c.id not in overridden]
     docs = sum(len(c.documents) for c in done)
     avg_cost_case = (sum(c.cold_cost_usd for c in done) / len(done)) if done else 0.0   # uncached unit cost

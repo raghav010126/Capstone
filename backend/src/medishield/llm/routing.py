@@ -29,6 +29,10 @@ ROUTES: dict[str, Route] = {
     "policy": Route(OPUS, "high", 16000),
     "fraud": Route(OPUS, "high", 16000),
     "justify": Route(SONNET, "low", 3000),
+    # role-aware assistant
+    "chat_router": Route(SONNET, "low", 2000),
+    "chat_sql": Route(SONNET, "medium", 4000),
+    "chat_answer": Route(SONNET, "low", 6000),
 }
 
 

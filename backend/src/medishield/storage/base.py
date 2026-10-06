@@ -79,6 +79,18 @@ class S3Storage(Storage):
         except ClientError:
             return False
 
+    def presign_post(self, key: str, max_bytes: int, expires: int = 600) -> dict:
+        """A one-time browser upload form for ``key``; S3 itself rejects files larger than ``max_bytes``."""
+        return self.client.generate_presigned_post(self.bucket, key, Conditions=[["content-length-range", 1, max_bytes]],
+                                                   ExpiresIn=expires)
+
+    def list_prefix(self, prefix: str) -> list[str]:
+        r = self.client.list_objects_v2(Bucket=self.bucket, Prefix=prefix, MaxKeys=100)
+        return sorted(o["Key"] for o in r.get("Contents", []))
+
+    def delete(self, key: str) -> None:
+        self.client.delete_object(Bucket=self.bucket, Key=key)
+
     def local_path(self, key: str) -> Path:
         p = self.cache / key
         if not p.exists():

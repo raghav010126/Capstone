@@ -280,6 +280,145 @@
     }
    }
   },
+  "/cases/upload-mode": {
+   "get": {
+    "tags": [
+     "cases"
+    ],
+    "summary": "Upload Mode",
+    "description": "Behind Lambda a request may carry at most 6 MB, so on AWS files go straight to S3 and the API reads them from there.",
+    "operationId": "upload_mode_cases_upload_mode_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UploadMode"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/cases/uploads": {
+   "post": {
+    "tags": [
+     "cases"
+    ],
+    "summary": "Grant Uploads",
+    "operationId": "grant_uploads_cases_uploads_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UploadRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UploadGrant"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/cases/from-uploads": {
+   "post": {
+    "tags": [
+     "cases"
+    ],
+    "summary": "Create From Uploads",
+    "description": "Create a case from files the browser uploaded with /cases/uploads. Only the caller's own upload prefix is read.",
+    "operationId": "create_from_uploads_cases_from_uploads_post",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "idempotency-key",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "maxLength": 128
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Idempotency-Key"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/FromUploads"
+       }
+      }
+     }
+    },
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CaseCreated"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/cases/{case_id}": {
    "get": {
     "tags": [
@@ -334,6 +473,61 @@
     ],
     "summary": "Document Image",
     "operationId": "document_image_cases__case_id__documents__doc_id__image_get",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "case_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Case Id"
+      }
+     },
+     {
+      "name": "doc_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Doc Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/cases/{case_id}/documents/{doc_id}/ela": {
+   "get": {
+    "tags": [
+     "cases"
+    ],
+    "summary": "Document Ela",
+    "description": "Error Level Analysis heatmap for a JPEG document (computed on demand; other file types have no compression history).",
+    "operationId": "document_ela_cases__case_id__documents__doc_id__ela_get",
     "security": [
      {
       "HTTPBearer": []
@@ -1245,6 +1439,79 @@
      }
     ]
    }
+  },
+  "/chat/scope": {
+   "get": {
+    "tags": [
+     "chat"
+    ],
+    "summary": "Chat Scope",
+    "description": "What this user's role may ask about, for the chat page (the same map the assistant enforces).",
+    "operationId": "chat_scope_chat_scope_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ChatScope"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/chat": {
+   "post": {
+    "tags": [
+     "chat"
+    ],
+    "summary": "Chat",
+    "operationId": "chat_chat_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ChatRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ChatResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
   }
  },
  "components": {
@@ -1838,6 +2105,211 @@
     ],
     "title": "ChainStatus"
    },
+   "ChatRequest": {
+    "properties": {
+     "question": {
+      "type": "string",
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Question"
+     },
+     "conversation_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{8,100}$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Conversation Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "question"
+    ],
+    "title": "ChatRequest"
+   },
+   "ChatResponse": {
+    "properties": {
+     "answer": {
+      "type": "string",
+      "title": "Answer"
+     },
+     "route": {
+      "type": "string",
+      "title": "Route"
+     },
+     "blocked": {
+      "type": "boolean",
+      "title": "Blocked"
+     },
+     "role": {
+      "type": "string",
+      "title": "Role"
+     },
+     "conversation_id": {
+      "type": "string",
+      "title": "Conversation Id"
+     },
+     "router": {
+      "type": "string",
+      "title": "Router",
+      "default": ""
+     },
+     "sql": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sql"
+     },
+     "sources": {
+      "items": {
+       "$ref": "#/components/schemas/ChatSource"
+      },
+      "type": "array",
+      "title": "Sources",
+      "default": []
+     },
+     "accessible": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Accessible",
+      "default": []
+     },
+     "restricted": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Restricted",
+      "default": []
+     }
+    },
+    "type": "object",
+    "required": [
+     "answer",
+     "route",
+     "blocked",
+     "role",
+     "conversation_id"
+    ],
+    "title": "ChatResponse"
+   },
+   "ChatScope": {
+    "properties": {
+     "role": {
+      "type": "string",
+      "title": "Role"
+     },
+     "accessible": {
+      "items": {
+       "$ref": "#/components/schemas/ChatSourceInfo"
+      },
+      "type": "array",
+      "title": "Accessible"
+     },
+     "restricted": {
+      "items": {
+       "$ref": "#/components/schemas/ChatSourceInfo"
+      },
+      "type": "array",
+      "title": "Restricted"
+     },
+     "examples": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Examples"
+     }
+    },
+    "type": "object",
+    "required": [
+     "role",
+     "accessible",
+     "restricted",
+     "examples"
+    ],
+    "title": "ChatScope"
+   },
+   "ChatSource": {
+    "properties": {
+     "n": {
+      "type": "integer",
+      "title": "N"
+     },
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Url"
+     },
+     "page": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Page"
+     },
+     "cited": {
+      "type": "boolean",
+      "title": "Cited",
+      "default": false
+     }
+    },
+    "type": "object",
+    "required": [
+     "n",
+     "kind",
+     "title"
+    ],
+    "title": "ChatSource"
+   },
+   "ChatSourceInfo": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "label": {
+      "type": "string",
+      "title": "Label"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "label"
+    ],
+    "title": "ChatSourceInfo"
+   },
    "Check": {
     "properties": {
      "name": {
@@ -1952,6 +2424,12 @@
      "reason": {
       "type": "string",
       "title": "Reason"
+     },
+     "language": {
+      "type": "string",
+      "title": "Language",
+      "description": "detected script/language of the page: en, es, hi",
+      "default": "en"
      }
     },
     "additionalProperties": false,
@@ -2469,6 +2947,20 @@
     ],
     "title": "FraudResult"
    },
+   "FromUploads": {
+    "properties": {
+     "upload_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "title": "Upload Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "upload_id"
+    ],
+    "title": "FromUploads"
+   },
    "HTTPValidationError": {
     "properties": {
      "detail": {
@@ -2537,6 +3029,12 @@
       },
       "type": "array",
       "title": "Checks"
+     },
+     "forensics": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Forensics",
+      "description": "ELA / typography findings (evidence for reviewers)"
      }
     },
     "additionalProperties": false,
@@ -3015,6 +3513,114 @@
      "display_name"
     ],
     "title": "TokenResponse"
+   },
+   "UploadFileSpec": {
+    "properties": {
+     "filename": {
+      "type": "string",
+      "maxLength": 255,
+      "minLength": 1,
+      "title": "Filename"
+     },
+     "size": {
+      "type": "integer",
+      "exclusiveMinimum": 0.0,
+      "title": "Size"
+     }
+    },
+    "type": "object",
+    "required": [
+     "filename",
+     "size"
+    ],
+    "title": "UploadFileSpec"
+   },
+   "UploadGrant": {
+    "properties": {
+     "upload_id": {
+      "type": "string",
+      "title": "Upload Id"
+     },
+     "uploads": {
+      "items": {
+       "$ref": "#/components/schemas/UploadTarget"
+      },
+      "type": "array",
+      "title": "Uploads"
+     }
+    },
+    "type": "object",
+    "required": [
+     "upload_id",
+     "uploads"
+    ],
+    "title": "UploadGrant"
+   },
+   "UploadMode": {
+    "properties": {
+     "mode": {
+      "type": "string",
+      "title": "Mode"
+     },
+     "max_file_bytes": {
+      "type": "integer",
+      "title": "Max File Bytes"
+     },
+     "max_files": {
+      "type": "integer",
+      "title": "Max Files"
+     }
+    },
+    "type": "object",
+    "required": [
+     "mode",
+     "max_file_bytes",
+     "max_files"
+    ],
+    "title": "UploadMode"
+   },
+   "UploadRequest": {
+    "properties": {
+     "files": {
+      "items": {
+       "$ref": "#/components/schemas/UploadFileSpec"
+      },
+      "type": "array",
+      "minItems": 1,
+      "title": "Files"
+     }
+    },
+    "type": "object",
+    "required": [
+     "files"
+    ],
+    "title": "UploadRequest"
+   },
+   "UploadTarget": {
+    "properties": {
+     "url": {
+      "type": "string",
+      "title": "Url"
+     },
+     "fields": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "title": "Fields"
+     },
+     "key": {
+      "type": "string",
+      "title": "Key"
+     }
+    },
+    "type": "object",
+    "required": [
+     "url",
+     "fields",
+     "key"
+    ],
+    "title": "UploadTarget"
    },
    "UserOut": {
     "properties": {

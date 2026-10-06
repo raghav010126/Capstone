@@ -193,3 +193,77 @@ export function ChartCard({ title, subtitle, children, className }: { title: str
     </section>
   )
 }
+
+/* ── reliability diagram ──────────────────────────────────────────────────────────────────────────── */
+export type RelBin = { lo: number; hi: number; n: number; mean_conf: number; accuracy: number }
+const SERIES2 = "#eb6834"
+
+/**
+ * Confidence vs observed accuracy. The dashed-free diagonal is perfect calibration; points above it are under-confident,
+ * below it over-confident. Marker size grows with the number of documents in the bin, so a lonely bin does not look as
+ * trustworthy as a full one. Series are told apart by shape as well as colour (circle = raw, diamond = calibrated).
+ */
+export function ReliabilityChart({ raw, calibrated }: { raw: RelBin[]; calibrated?: RelBin[] }) {
+  const tip = useTip()
+  const W = 420
+  const H = 300
+  const m = { l: 44, r: 14, t: 12, b: 40 }
+  const x = (v: number) => m.l + v * (W - m.l - m.r)
+  const y = (v: number) => H - m.b - v * (H - m.t - m.b)
+  const ticks = [0, 0.25, 0.5, 0.75, 1]
+  const nMax = Math.max(1, ...raw.map((b) => b.n), ...(calibrated ?? []).map((b) => b.n))
+  const r = (n: number) => 4 + 4 * Math.sqrt(n / nMax)
+  const path = (bins: RelBin[]) => bins.map((b, i) => `${i ? "L" : "M"}${x(b.mean_conf)},${y(b.accuracy)}`).join(" ")
+
+  const series = (bins: RelBin[], color: string, shape: "circle" | "diamond", label: string) => (
+    <g key={label}>
+      {bins.length > 1 && <path d={path(bins)} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+      {bins.map((b) => {
+        const cx = x(b.mean_conf)
+        const cy = y(b.accuracy)
+        const rr = r(b.n)
+        const show = (el: SVGElement) => tip.show(el as unknown as HTMLElement, `${label}: confidence ${b.lo.toFixed(1)}–${b.hi.toFixed(1)}`, `${(b.accuracy * 100).toFixed(0)}% correct`, `${b.n} documents · mean confidence ${(b.mean_conf * 100).toFixed(0)}%`)
+        return (
+          <g key={`${label}-${b.lo}`} tabIndex={0} role="img" aria-label={`${label}, confidence ${b.lo}–${b.hi}: ${(b.accuracy * 100).toFixed(0)}% correct, ${b.n} documents`}
+            onPointerEnter={(e) => show(e.currentTarget)} onPointerLeave={tip.hide} onFocus={(e) => show(e.currentTarget)} onBlur={tip.hide} className="outline-none">
+            <circle cx={cx} cy={cy} r={Math.max(rr + 8, 14)} fill="transparent" />
+            {shape === "circle" ? (
+              <circle cx={cx} cy={cy} r={rr} fill={color} stroke="white" strokeWidth={2} />
+            ) : (
+              <rect x={cx - rr} y={cy - rr} width={rr * 2} height={rr * 2} transform={`rotate(45 ${cx} ${cy})`} fill={color} stroke="white" strokeWidth={2} rx={1.5} />
+            )}
+          </g>
+        )
+      })}
+    </g>
+  )
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="group" aria-label="Reliability diagram: confidence against observed accuracy">
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={x(0)} x2={x(1)} y1={y(t)} y2={y(t)} stroke={GRID} />
+            <line x1={x(t)} x2={x(t)} y1={y(0)} y2={y(1)} stroke={GRID} />
+            <text x={m.l - 8} y={y(t) + 3} textAnchor="end" fontSize="10" className="fill-muted-foreground tabular-nums">{Math.round(t * 100)}%</text>
+            <text x={x(t)} y={H - m.b + 14} textAnchor="middle" fontSize="10" className="fill-muted-foreground tabular-nums">{Math.round(t * 100)}%</text>
+          </g>
+        ))}
+        <line x1={x(0)} y1={y(0)} x2={x(1)} y2={y(1)} stroke="oklch(0.65 0 0)" strokeWidth={1.5} />
+        <text x={x(0.98)} y={y(0.9)} textAnchor="end" fontSize="10" className="fill-muted-foreground">perfect calibration</text>
+        {series(raw, "#2a78d6", "circle", "Raw")}
+        {calibrated && series(calibrated, SERIES2, "diamond", "Calibrated")}
+        <text x={(x(0) + x(1)) / 2} y={H - 6} textAnchor="middle" fontSize="11" className="fill-muted-foreground">confidence reported by the system</text>
+        <text transform={`translate(11 ${(y(0) + y(1)) / 2}) rotate(-90)`} textAnchor="middle" fontSize="11" className="fill-muted-foreground">decisions that were correct</text>
+      </svg>
+      <ul className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-xs">
+        <li className="flex items-center gap-1.5"><span className="inline-block size-2.5 rounded-full" style={{ background: "#2a78d6" }} /> Raw confidence</li>
+        {calibrated && <li className="flex items-center gap-1.5"><span className="inline-block size-2.5 rotate-45 rounded-[2px]" style={{ background: SERIES2 }} /> After isotonic calibration</li>}
+        <li className="flex items-center gap-1.5 text-muted-foreground"><span className="inline-block h-0.5 w-4" style={{ background: "oklch(0.65 0 0)" }} /> Perfect calibration</li>
+      </ul>
+      {tip.node}
+      <TableView head={["Confidence bin", "Documents", "Raw accuracy", ...(calibrated ? ["Calibrated accuracy"] : [])]}
+        rows={raw.map((b, i) => [`${b.lo.toFixed(1)}–${b.hi.toFixed(1)}`, b.n, `${(b.accuracy * 100).toFixed(0)}%`, ...(calibrated?.[i] ? [`${(calibrated[i].accuracy * 100).toFixed(0)}%`] : [])])} />
+    </div>
+  )
+}

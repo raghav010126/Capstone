@@ -45,6 +45,7 @@ from medishield.schemas import (
     FraudResult,
     KycResult,
     PolicyResult,
+    QualityMetrics,
 )
 
 
@@ -97,7 +98,8 @@ def perceive(task: DocTask, config: RunnableConfig) -> dict:
     dtype = DocType(out["classification"]["doc_type"])
     if dtype != DocType.UNKNOWN and not q.blank:
         try:
-            ext, run = extract(path, dtype, lines, q, records, tag=doc_id)
+            ext, run = extract(path, dtype, lines, q, records, tag=doc_id,
+                               language=out["classification"].get("language", "en"))
             runs.append(run.model_dump())
             out["extraction"] = ext.model_dump(mode="json")
         except LLMError as e:
@@ -141,7 +143,8 @@ def specialists(task: DocTask, config: RunnableConfig) -> dict:
     tamper_reject = load_policy().get("tamper_action", "REJECT") == "REJECT"
     try:
         if dtype in (DocType.ID_DOCUMENT, DocType.POLICY_AMENDMENT):
-            k, run = kyc_agent.run_kyc(doc_id, path, dtype, ext, ctx, records, tamper_reject)
+            quality = QualityMetrics.model_validate(p["quality"]) if p.get("quality") else None
+            k, run = kyc_agent.run_kyc(doc_id, path, dtype, ext, ctx, records, tamper_reject, quality)
             out["kyc"] = k.model_dump(mode="json")
             runs.append(run.model_dump())
         if dtype in claims_agent.VALIDATORS:

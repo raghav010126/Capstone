@@ -23,6 +23,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "eval"))
 
+import calibration as CAL
 import metrics as M
 from medishield.graph.build import perceive
 from medishield.llm import ledger
@@ -77,7 +78,7 @@ def main() -> None:
     ap.add_argument("--dataset", default=str(REPO / "data" / "official"))
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--cases", default="")
-    ap.add_argument("--no-report", action="store_true")
+    ap.add_argument("--report", default="", help="also write this markdown report (default: only the published JSON)")
     args = ap.parse_args()
 
     root = Path(args.dataset)
@@ -117,6 +118,19 @@ def main() -> None:
               f"{st['wall_ms'] / 1000:5.1f}s  spend so far ${ledger().total - spend0:.2f}")
     elapsed = time.time() - t0
 
+    # confidence calibration: fitted on the dev split only, applied unchanged everywhere else
+    cal_path = REPO / "docs" / "eval_results" / "calibrator.json"
+    pairs = {"all": rows, "visible": [r for r in rows if r["visible"]]}
+    fit_here = args.split == "dev" and root.name == "official" and not args.cases
+    if fit_here:
+        cal_path.parent.mkdir(exist_ok=True)
+        CAL.Isotonic.fit([r["confidence"] for r in pairs["all"]],
+                         [r["pred_decision"] == r["expected_decision"] for r in pairs["all"]]).save(cal_path)
+    calibrator = CAL.Isotonic.load(cal_path)
+    calibration = {k: CAL.summary([r["confidence"] for r in v], [r["pred_decision"] == r["expected_decision"] for r in v], calibrator)
+                   for k, v in pairs.items()}
+    calibration["fitted_on_this_split"] = fit_here          # True => the "calibrated" numbers are in-sample (optimistic)
+
     gold = json.loads((REPO / "eval" / "retrieval_gold.json").read_text())
     cls_ok = [r["pred_type"] == r["true_type"] for r in rows]
     result = {
@@ -131,6 +145,8 @@ def main() -> None:
         "fraud": M.score_fraud(rows),
         "edge_cases": M.score_edges(rows),
         "ops": M.ops(rows, case_rows, runs),
+        "by_language": M.by_language(rows, fields_gt),
+        "calibration": calibration,
         "spend_this_run_usd": round(ledger().total - spend0, 4),
         "graph_seconds": round(elapsed, 1),
     }
@@ -142,10 +158,10 @@ def main() -> None:
         pub = REPO / "docs" / "eval_results"
         pub.mkdir(exist_ok=True)
         (pub / f"{root.name}-{args.split}.json").write_text(json.dumps(result, indent=1, default=str))
-    if not args.no_report:
+    if args.report:
         from report import write_report
 
-        write_report(result, REPO / "docs" / "EVAL_REPORT.md")
+        write_report(result, Path(args.report))
     print(json.dumps({k: result[k] for k in ("classification", "decision", "cases")}, default=str)[:1500])
     print(f"-> {out_dir}")
 

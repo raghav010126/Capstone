@@ -82,6 +82,44 @@ class Ledger:
                                     "tag": tag, **asdict(usage)}) + "\n")
 
 
+class DynamoLedger(Ledger):
+    """The same ledger kept in DynamoDB (atomic counters), for Lambda where there is no durable local disk and many
+    invocations run at once. One item holds the running total; one item per UTC day holds that day's spend."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+
+    def _table(self):
+        from medishield.db.dynamo import get_dynamo_repo
+
+        return get_dynamo_repo().table
+
+    @staticmethod
+    def _day_key(ts: float | None = None) -> str:
+        return "LEDGER#" + datetime.fromtimestamp(ts or time.time(), UTC).strftime("%Y-%m-%d")
+
+    def _read(self, pk: str) -> float:
+        item = self._table().get_item(Key={"pk": pk, "sk": "META"}, ConsistentRead=True).get("Item")
+        return float(item["usd"]) if item else 0.0
+
+    @property
+    def total(self) -> float:                     # type: ignore[override]
+        return self._read("LEDGER#total")
+
+    def spent_today(self) -> float:
+        return self._read(self._day_key())
+
+    def record(self, step: str, model: str, usage: Usage, cost: float, tag: str = "") -> None:
+        from decimal import Decimal
+
+        amount = Decimal(str(round(cost, 6)))
+        t = self._table()
+        t.update_item(Key={"pk": "LEDGER#total", "sk": "META"}, UpdateExpression="ADD usd :c, calls :one",
+                      ExpressionAttributeValues={":c": amount, ":one": 1})
+        t.update_item(Key={"pk": self._day_key(), "sk": "META"}, UpdateExpression="ADD usd :c SET #t = :ttl",
+                      ExpressionAttributeNames={"#t": "ttl"}, ExpressionAttributeValues={":c": amount, ":ttl": int(time.time()) + 30 * 86400})
+
+
 _ledger: Ledger | None = None
 _ledger_lock = threading.Lock()
 
@@ -90,5 +128,5 @@ def ledger() -> Ledger:
     global _ledger
     with _ledger_lock:
         if _ledger is None:
-            _ledger = Ledger()
+            _ledger = DynamoLedger() if get_settings().db_backend == "dynamodb" else Ledger()
         return _ledger

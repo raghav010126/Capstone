@@ -108,3 +108,43 @@ text), prescriptions (Rx date, prescriber, NPI, DEA, drugs) and amendments (with
 - The 24-row benefits table is intact.
 - Table 4.1 is recovered completely once its fragments are stitched (F8).
 - Conversion time: 31 s on the first call (model load), 8 s after that.
+
+## Checkpoint 5 additions
+
+### Corrected dataset (`datagen/augment.py` -> `data/corrected`)
+The labels the generator forgot to draw are made visible by editing the *finished images* as a forger would, and the ground
+truth is regenerated from the patched render records (`eval/truth.py`):
+
+| Defect | Correction | Labels not visible in the pixels |
+|---|---|---|
+| F2 tampered IDs never drawn | expiry date covered and redrawn in a different size and ink, card saved as JPEG twice (original scan, then the edit) | 6 -> 1 |
+| F3 name mismatch never drawn | the printed name replaced by the altered name the generator already chose | |
+| F5 blur not applied | the Gaussian blur the generator meant to apply | |
+| F4 structuring (UB-04 form) | **not re-rendered**: stays labelled "not visible" | |
+
+Unchanged files are hard-linked. Note for maintainers: files that get rewritten (metadata and ground-truth JSON) must be private
+copies; writing through a hard link silently modifies the official dataset (this happened once and is now guarded against).
+
+### F22 - tamper forensics on flat synthetic documents (`eval/forensics_eval.py`, `docs/eval_results/forensics.json`)
+Four textbook detectors were prototyped on the 24 ID cards that have a printed expiry date:
+
+| Method | Result |
+|---|---|
+| Error Level Analysis, per block | flagged ~60% of *clean* JPEGs, missed a third of forgeries |
+| JPEG-ghost curves, per block and per text line | no separation between clean and forged |
+| Noise-consistency | not applicable: the official ID cards have **no scan grain** (grain sigma 0) |
+| Typography (width per character of each date) | **0 / 24 clean PNGs flagged, 19 / 24 retyped dates caught** |
+
+Conclusion: ELA is weak on these documents (flat renders with no photographic texture, where JPEG error is dominated by glyph
+edges). It ships as an *advisory* heatmap and warning; typography plus an independent visual review decides. Height was
+dropped from the typography measure (crops are clipped by neighbouring text and dark bands); width per character is stable.
+
+### Multilingual documents (`datagen/multilingual.py`, `data/multilingual`)
+Spanish and Hindi prescriptions, ID cards, claim forms and discharge summaries, including failure cases (expired ID, missing
+DEA number, excluded procedure) and a dev / held-out split by member. Realistic wrinkles are deliberate: **dates are printed
+day/month/year**, Spanish carries accents, Hindi labels are Devanagari with names and codes in Latin script. Pillow here has no
+complex-script layout engine (Devanagari vowel signs were misplaced), so pages are rendered with `fpdf2` + HarfBuzz and
+rasterised with pdfium.
+
+### Prompt-injection red team (`datagen/redteam.py`, `docs/redteam.md`)
+Seven attacks on documents with a known correct decision. Every attacked document keeps its label.

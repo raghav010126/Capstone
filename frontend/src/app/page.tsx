@@ -146,9 +146,9 @@ export default function Dashboard() {
                 </TableRow>
               ))}
             {cases.data?.map((c) => (
-              <TableRow key={c.id} className="cursor-pointer" onClick={() => router.push(`/cases/${c.id}`)}>
+              <TableRow key={c.id} className="cursor-pointer" onClick={() => router.push(`/cases/view?id=${c.id}`)}>
                 <TableCell>
-                  <Link href={`/cases/${c.id}`} className="font-mono text-sm font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
+                  <Link href={`/cases/view?id=${c.id}`} className="font-mono text-sm font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
                     {c.id}
                   </Link>
                   {c.pending_override && <span className="ml-2 rounded bg-escalate-soft px-1.5 py-0.5 text-[10px] font-medium text-escalate">approval pending</span>}

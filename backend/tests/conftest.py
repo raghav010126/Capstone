@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import io
 import itertools
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,14 +23,17 @@ PASSWORDS = {u: f"{u}-demo" for u in ("submitter", "reviewer", "senior", "audito
 
 
 def reset_runtime() -> None:
-    from medishield import pipeline
+    from medishield import observability, pipeline
     from medishield.api.security import limiter
     from medishield.config import get_settings
+    from medishield.db.dynamo import reset_dynamo_repo
     from medishield.db.session import reset_engine
     from medishield.records import get_records
     from medishield.storage.base import get_storage
     from medishield.worker.queue import get_huey, tasks
 
+    reset_dynamo_repo()
+    observability._client.cache_clear()
     get_settings.cache_clear()
     get_storage.cache_clear()
     tasks.cache_clear()
@@ -50,13 +54,29 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("MEDISHIELD_DEMO_USERS", "1")
     monkeypatch.setenv("MEDISHIELD_LLM_OFFLINE", "1")
     monkeypatch.setenv("MEDISHIELD_ENV", "dev")
+    monkeypatch.setenv("MEDISHIELD_TRACING", "0")                  # tests must never send traces
     monkeypatch.setenv("MEDISHIELD_LEDGER_PATH", str(tmp_path / "spend.jsonl"))   # never touch the real spend ledger
     monkeypatch.setenv("BCRYPT_ROUNDS", "4")                       # fast hashing in tests only
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("JWT_SECRET", raising=False)
+    mock = None
+    if os.environ.get("MEDISHIELD_TEST_DB") == "dynamodb":         # run the whole suite against DynamoDB (moto): `make test-dynamo`
+        from moto import mock_aws
+
+        for k, v in (("AWS_ACCESS_KEY_ID", "test"), ("AWS_SECRET_ACCESS_KEY", "test"), ("AWS_DEFAULT_REGION", "us-east-1"),
+                     ("MEDISHIELD_DB", "dynamodb"), ("DYNAMO_TABLE", "medishield-test")):
+            monkeypatch.setenv(k, v)
+        mock = mock_aws()
+        mock.start()
     reset_runtime()
+    if mock:
+        from medishield.db.dynamo import get_dynamo_repo
+
+        get_dynamo_repo().ensure_table()
     yield tmp_path
     reset_runtime()
+    if mock:
+        mock.stop()
 
 
 def png_bytes(color=(255, 255, 255), size=(400, 300), text_seed: int = 0) -> bytes:
@@ -154,3 +174,35 @@ def auth(client):
 def upload(client, headers, n: int = 2, **kw):
     files = [("files", (f"doc{i}.png", png_bytes(text_seed=i), "image/png")) for i in range(n)]
     return client.post("/cases", files=files, headers=headers, **kw)
+
+
+# ── backend-neutral helpers for tests that reach below the API (they run on SQL and on DynamoDB) ──────────
+def add_user(username: str, role: str, password: str, display_name: str = "Test User") -> None:
+    from medishield.api.security import hash_password
+    from medishield.db.repo import repo_scope
+
+    with repo_scope() as db:
+        db.add_user(username, display_name, role, hash_password(password))
+
+
+def tamper_audit(seq: int, *, actor: str | None = None, delete: bool = False) -> None:
+    """Edit or remove an audit row behind the application's back (what an attacker with database access would do)."""
+    from medishield.config import get_settings
+
+    if get_settings().db_backend == "dynamodb":
+        from medishield.db.dynamo import get_dynamo_repo
+
+        table, key = get_dynamo_repo().table, {"pk": "AUDIT", "sk": f"{seq:012d}"}
+        if delete:
+            table.delete_item(Key=key)
+        else:
+            table.update_item(Key=key, UpdateExpression="SET actor = :a", ExpressionAttributeValues={":a": actor})
+        return
+    from medishield.db.session import get_engine
+    from sqlalchemy import text
+
+    with get_engine().begin() as conn:
+        if delete:
+            conn.execute(text("DELETE FROM audit_events WHERE seq=:s"), {"s": seq})
+        else:
+            conn.execute(text("UPDATE audit_events SET actor=:a WHERE seq=:s"), {"a": actor, "s": seq})

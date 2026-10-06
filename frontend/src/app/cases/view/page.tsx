@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, Download, FileWarning, Gavel, Shuffle } from "lucide-react"
 import { toast } from "sonner"
@@ -21,8 +21,17 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
-export default function CasePage() {
-  const { id } = useParams<{ id: string }>()
+// A static export cannot have a dynamic [id] segment, so the page is /cases/view?id=...
+export default function CasePageRoute() {
+  return (
+    <Suspense fallback={null}>
+      <CasePage />
+    </Suspense>
+  )
+}
+
+function CasePage() {
+  const id = useSearchParams().get("id") ?? ''
   const { can } = useAuth()
   const qc = useQueryClient()
   const [docId, setDocId] = useState<string | null>(null)
