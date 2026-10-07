@@ -3,6 +3,7 @@
 Usage (from the repo root): python3 scripts/make_flow_diagram.py; the PNG is a 2x render of the SVG (any browser screenshot).
 """
 from html import escape
+from pathlib import Path
 
 W, H = 1920, 1080
 BLUE, PURPLE, GREEN, ORANGE = ("#2563eb", "#60a5fa"), ("#7c3aed", "#a78bfa"), ("#2f855a", "#68d391"), ("#ea580c", "#fdba74")
@@ -104,5 +105,5 @@ svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewB
 <rect width="{W}" height="{H}" fill="url(#bg)"/>
 {chr(10).join(el)}
 </svg>'''
-open("docs/diagrams/claim_flow.svg", "w").write(svg)
+Path("docs/diagrams/claim_flow.svg").write_text(svg)
 print("svg written")
