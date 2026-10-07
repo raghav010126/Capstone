@@ -1,7 +1,33 @@
 {
  "split": "dev",
  "dataset": "official",
- "timestamp": "2026-10-06T08:20:07",
+ "timestamp": "2026-10-07T00:42:22+00:00",
+ "provenance": {
+  "scoring_version": 2,
+  "git_commit": "0b53e4335f480eae4ad7810ac8cd5ff4acaebeb6",
+  "tracked_diff_sha256": "11c90e5f029bbcf34c1aee75e85a0878269182934e4276a69e9f9dd448b490a1",
+  "dataset_labels_sha256": "3e879565f008fdd99d7f053d94a81ac3384d993298da0f9f5610d3eba1b883cd",
+  "llm_offline": false,
+  "llm_cache_enabled": true,
+  "vision_mode": "auto",
+  "text_extract": false,
+  "model_routes": {
+   "classifier": "claude-sonnet-5-5",
+   "extract": "claude-sonnet-5-5",
+   "kyc_visual": "claude-sonnet-5-5",
+   "policy": "claude-sonnet-5-5",
+   "fraud": "claude-sonnet-5-5",
+   "justify": "claude-sonnet-5-5",
+   "chat_router": "claude-sonnet-5-5",
+   "chat_sql": "claude-sonnet-5-5",
+   "chat_answer": "claude-sonnet-5-5"
+  },
+  "prefetch_enabled": false,
+  "setup_seconds": 1.81,
+  "prefetch_seconds": 0.0,
+  "latency_scope": "graph only; excludes setup and prefetch; includes cached calls",
+  "calibrator_source": "/Users/raghav.bansal/Library/CloudStorage/OneDrive-Slalom/Desktop/medishield-capstone/eval/runs/20261007-004222-364421-official-dev/calibrator.json"
+ },
  "classification": {
   "accuracy": 1.0,
   "n": 77,
@@ -228,16 +254,16 @@
   "cases": 17,
   "docs": 77,
   "case_latency_s": {
-   "p50": 9.3,
-   "p95": 16.2,
-   "max": 16.167128541972488
+   "p50": 5.3,
+   "p95": 5.8,
+   "max": 5.835943791957106
   },
-  "cost_usd_new_calls": 0.3163,
-  "cold_cost_usd": 1.3372,
+  "cost_usd_new_calls": 0.1106,
+  "cold_cost_usd": 1.3371,
   "cold_cost_per_case_usd": 0.0787,
   "cold_cost_per_doc_usd": 0.0174,
   "llm_calls": 129,
-  "cache_hits": 99,
+  "cache_hits": 111,
   "retries_by_agent": {
    "extractor": 3
   },
@@ -247,10 +273,10 @@
    "extractor": 0.8566,
    "fraud": 0.1256,
    "kyc_visual": 0.0,
+   "kyc": 0.0,
    "claims": 0.0,
    "policy": 0.2277,
-   "kyc": 0.0,
-   "justify": 0.1178
+   "justify": 0.1177
   },
   "mean_grounding_rate": 0.9794,
   "mean_support_rate": 0.9847
@@ -361,6 +387,6 @@
   },
   "fitted_on_this_split": true
  },
- "spend_this_run_usd": 0.3163,
- "graph_seconds": 146.1
+ "spend_this_run_usd": 0.1106,
+ "graph_seconds": 79.1
 }

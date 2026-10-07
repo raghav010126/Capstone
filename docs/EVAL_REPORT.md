@@ -1,6 +1,6 @@
 # MediShield evaluation report
 
-_Assembled 2026-10-06 08:24 from `docs/eval_results/` by `make report`. Every number comes from running the real pipeline (Claude Sonnet 5.5 / Opus 5.5, RapidOCR, Docling, Qdrant) on labelled documents._
+_Assembled 2026-10-06 17:46 from `docs/eval_results/` by `make report`. Every number comes from running the real pipeline (Claude Sonnet 5.5 / Opus 5.5, RapidOCR, Docling, Qdrant) on labelled documents._
 
 **How to read this.** Prompts and thresholds were tuned on the *dev* split only. The *held-out* split, the *seed-7* set (generated with a different random seed and never inspected during development) and the multilingual held-out members are reported without tuning. Decision accuracy is shown on **all** labels and on the labels that are actually **visible in the pixels**: the instructors' generator records a few labels (tampered IDs, a name mismatch, a structuring fraud, a blur) that it never draws, so no system can see them (see `docs/dataset_findings.md`).
 
@@ -58,7 +58,8 @@ ECE = expected calibration error (lower is better); Brier = mean squared error o
 
 ## Official dataset, dev split (prompts were tuned here)
 
-_Generated 2026-10-06T08:20:07 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
+_Generated 2026-10-07T00:42:22+00:00. Synthetic benchmark; document and case scores are reported separately._
+Scoring version 2; offline replay: False; prefetch: False. Latency scope: graph only; excludes setup and prefetch; includes cached calls.
 
 #### Rubric metrics
 
@@ -149,10 +150,10 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 #### Operations
 
 - Cases: 17, documents: 77
-- Case latency (cold path incl. LLM): p50 9.3s, p95 16.2s
-- Cost without cache: $1.34 total, $0.079/case, $0.017/document. Spent this run: $0.32
+- Graph latency (cache/prefetch assisted; setup and prefetch excluded): p50 5.3s, p95 5.8s
+- Cost without cache: $1.34 total, $0.079/case, $0.017/document. Spent this run: $0.11
 - Cost by agent: classifier $0.01, extractor $0.86, fraud $0.13, policy $0.23, justify $0.12
-- LLM calls: 129 (99 served from cache); retries on Opus: {'extractor': 3}
+- LLM calls: 129 (111 served from cache); retries on Opus: {'extractor': 3}
 - Mean OCR grounding rate 97.9%; mean support rate (grounded or corroborated by the member database) 98.5%
 
 
@@ -160,7 +161,8 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 
 ## Official dataset, held-out split (never tuned on)
 
-_Generated 2026-10-06T08:24:02 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
+_Generated 2026-10-07T00:44:14+00:00. Synthetic benchmark; document and case scores are reported separately._
+Scoring version 2; offline replay: False; prefetch: False. Latency scope: graph only; excludes setup and prefetch; includes cached calls.
 
 #### Rubric metrics
 
@@ -255,10 +257,10 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 #### Operations
 
 - Cases: 17, documents: 78
-- Case latency (cold path incl. LLM): p50 11.1s, p95 14.2s
-- Cost without cache: $1.39 total, $0.082/case, $0.018/document. Spent this run: $0.46
+- Graph latency (cache/prefetch assisted; setup and prefetch excluded): p50 5.5s, p95 7.0s
+- Cost without cache: $1.39 total, $0.082/case, $0.018/document. Spent this run: $0.11
 - Cost by agent: classifier $0.02, extractor $0.89, fraud $0.13, policy $0.23, justify $0.12
-- LLM calls: 133 (81 served from cache); retries on Opus: {'extractor': 4}
+- LLM calls: 133 (114 served from cache); retries on Opus: {'extractor': 4}
 - Mean OCR grounding rate 98.4%; mean support rate (grounded or corroborated by the member database) 99.2%
 
 
@@ -266,7 +268,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 
 ## Corrected dataset (tampering, name mismatch and blur actually drawn), all documents
 
-_Generated 2026-10-05T15:49:42 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
+_Generated 2026-10-05T15:49:42. Synthetic benchmark; document and case scores are reported separately._
 
 #### Rubric metrics
 
@@ -365,7 +367,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 #### Operations
 
 - Cases: 34, documents: 155
-- Case latency (cold path incl. LLM): p50 4.4s, p95 8.5s
+- Graph latency (cache/prefetch assisted; setup and prefetch excluded): p50 4.4s, p95 8.5s
 - Cost without cache: $4.25 total, $0.125/case, $0.027/document. Spent this run: $0.05
 - Cost by agent: classifier $0.06, extractor $1.82, kyc_visual $0.03, policy $1.26, fraud $0.83, justify $0.25
 - LLM calls: 272 (254 served from cache); retries on Opus: {'extractor': 10, 'kyc_visual': 1, 'classifier': 2}
@@ -376,7 +378,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 
 ## Unseen generalisation set (generator seed 7), all documents
 
-_Generated 2026-10-05T15:54:26 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
+_Generated 2026-10-05T15:54:26. Synthetic benchmark; document and case scores are reported separately._
 
 #### Rubric metrics
 
@@ -481,7 +483,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 #### Operations
 
 - Cases: 34, documents: 155
-- Case latency (cold path incl. LLM): p50 7.9s, p95 10.5s
+- Graph latency (cache/prefetch assisted; setup and prefetch excluded): p50 7.9s, p95 10.5s
 - Cost without cache: $4.14 total, $0.122/case, $0.027/document. Spent this run: $0.24
 - Cost by agent: classifier $0.07, extractor $1.77, policy $1.21, fraud $0.84, justify $0.25
 - LLM calls: 267 (226 served from cache); retries on Opus: {'extractor': 8, 'classifier': 3}
@@ -492,7 +494,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 
 ## Unseen set with the tampering, name mismatch and blur drawn (corrected seed 7), all documents
 
-_Generated 2026-10-05T15:58:20 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
+_Generated 2026-10-05T15:58:20. Synthetic benchmark; document and case scores are reported separately._
 
 #### Rubric metrics
 
@@ -593,7 +595,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 #### Operations
 
 - Cases: 34, documents: 155
-- Case latency (cold path incl. LLM): p50 4.1s, p95 27.0s
+- Graph latency (cache/prefetch assisted; setup and prefetch excluded): p50 4.1s, p95 27.0s
 - Cost without cache: $4.22 total, $0.124/case, $0.027/document. Spent this run: $0.27
 - Cost by agent: classifier $0.07, extractor $1.79, kyc_visual $0.06, policy $1.21, fraud $0.84, justify $0.25
 - LLM calls: 274 (248 served from cache); retries on Opus: {'extractor': 9, 'classifier': 3, 'kyc_visual': 2}
@@ -604,7 +606,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 
 ## Spanish and Hindi, dev members
 
-_Generated 2026-10-05T16:02:28 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
+_Generated 2026-10-05T16:02:28. Synthetic benchmark; document and case scores are reported separately._
 
 #### Rubric metrics
 
@@ -680,7 +682,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 #### Operations
 
 - Cases: 14, documents: 40
-- Case latency (cold path incl. LLM): p50 13.3s, p95 27.6s
+- Graph latency (cache/prefetch assisted; setup and prefetch excluded): p50 13.3s, p95 27.6s
 - Cost without cache: $1.85 total, $0.132/case, $0.046/document. Spent this run: $1.02
 - Cost by agent: classifier $0.22, extractor $0.82, policy $0.43, kyc_visual $0.03, fraud $0.28, justify $0.08
 - LLM calls: 136 (72 served from cache); retries on Opus: {'extractor': 22, 'classifier': 15}
@@ -691,7 +693,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 
 ## Spanish and Hindi, held-out members
 
-_Generated 2026-10-05T16:06:06 by `make eval`. Prompts are tuned on the dev split only; held-out and seed-7 numbers are reported without tuning._
+_Generated 2026-10-05T16:06:06. Synthetic benchmark; document and case scores are reported separately._
 
 #### Rubric metrics
 
@@ -774,7 +776,7 @@ Gold sections come from `eval/retrieval_gold.json`, built from the policy text (
 #### Operations
 
 - Cases: 14, documents: 40
-- Case latency (cold path incl. LLM): p50 10.3s, p95 20.7s
+- Graph latency (cache/prefetch assisted; setup and prefetch excluded): p50 10.3s, p95 20.7s
 - Cost without cache: $1.91 total, $0.137/case, $0.048/document. Spent this run: $0.94
 - Cost by agent: classifier $0.24, extractor $0.85, policy $0.43, kyc_visual $0.03, fraud $0.28, justify $0.08
 - LLM calls: 140 (78 served from cache); retries on Opus: {'extractor': 24, 'classifier': 15}

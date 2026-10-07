@@ -30,7 +30,7 @@ Everything is created by one CloudFormation template (`infra/template.yaml`) and
 
 Not used because they bill while idle: NAT gateway, WAF, provisioned concurrency, RDS, OpenSearch, point-in-time recovery.
 
-**Idle total: about $1.25 a month.** Processing one case costs about $0.002 of Lambda time plus the model spend (about $0.11 to $0.16 per case, see `docs/EVAL_REPORT.md`).
+**Idle total: about $1.25 a month.** Processing one case costs about $0.002 of Lambda time plus the model spend (about $0.08 per case in the deployed OCR-first mode, see `docs/EVAL_REPORT.md`).
 Parsing an uploaded policy costs under half a cent (one to two minutes at 3 GB, no model calls), and policies are uploaded rarely.
 
 ## Guardrails against a surprise bill

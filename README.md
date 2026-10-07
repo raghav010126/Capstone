@@ -2,7 +2,7 @@
 
 **AI Engineering Bootcamp capstone, Assignment 02.** A production-style system that reads a bundle of insurance documents
 (claim forms, IDs, discharge summaries, prescriptions, policy amendments), checks identity, coverage and fraud, and returns
-**Approve / Reject / Escalate** with a justification in under two minutes. It includes a case-management UI for the operations
+**Approve / Reject / Escalate** with evidence and a justification. It includes a case-management UI for the operations
 team and a **role-aware assistant** that answers questions with citations.
 
 | | |
@@ -10,25 +10,32 @@ team and a **role-aware assistant** that answers questions with citations.
 | **Live demo** | https://d3064azeabhrfe.cloudfront.net (AWS: Bedrock AgentCore + Lambda + DynamoDB). Logins on request; there are no public demo passwords. |
 | **Demo video** | _link added after recording_ |
 | **Evaluation report** | [docs/EVAL_REPORT.md](docs/EVAL_REPORT.md): every number below is reproducible with `make eval` / `make report` |
+| **Sample documents** | [22 labelled synthetic documents, 6 complete cases and both policies](docs/samples/medishield-samples.zip), reproducible with `make samples`. |
+| **Repository** | Private for now. Demo video and final submission visibility remain pending. |
+| **Slides** | [Dark presentation](docs/MediShield_capstone.pptx): eight main slides plus four appendix slides, with an 8-minute demo script in speaker notes. |
 | **Try it** | [docs/manual_testing.md](docs/manual_testing.md): a 15-minute manual test script |
 
 ![Case detail: document viewer with evidence boxes, per-agent panels and the decision](docs/screenshots/case-detail.png)
 
 ## Results
 
-Prompts and thresholds were tuned on the **dev** split only. Everything else was run once, untouched.
+Development uses the **dev** split. The official rows below were re-evaluated after the safety fixes using cached model responses; other rows are historical runs from the same synthetic generator family. These are not production accuracy estimates. See [implementation and validation notes](docs/IMPLEMENTATION_REVIEW.md).
 
 | Run | Docs | Classification | Claim-field extraction | Policy retrieval R@3 | Decisions (all labels) | Decisions (labels visible in the image) | Cost / case |
 |---|---|---|---|---|---|---|---|
-| Official dataset, dev | 77 | 100% | 100% | 100% | 96.1% | 100% | $0.08 |
-| Official dataset, **held-out** | 78 | 100% | 100% | 100% | 96.2% | 100% | $0.08 |
-| **Unseen set** (generator seed 7, never inspected) | 155 | 100% | 100% | 100% | 96.1% | 100% | $0.12 |
+| Official dataset, dev | 77 | 100.0% | 100.0% | 100.0% | 96.1% | 100.0% | $0.08 |
+| Official dataset, **held-out** | 78 | 100.0% | 100.0% | 100.0% | 96.2% | 100.0% | $0.08 |
+| **Seed 7** (historical) | 155 | 100% | 100% | 100% | 96.1% | 100% | $0.12 |
 | Unseen set with tampering, name mismatch and blur actually drawn | 155 | 100% | 100% | 100% | 98.1% | 99.4% | $0.12 |
 | Spanish + Hindi documents, held-out | 40 | 100% | 100% | 100% | 95.0% | 95.0% | $0.14 |
 
-Costs are uncached model spend per case. The two official rows use the current model routing. The other rows were run with the
-earlier routing (Opus for policy and fraud, about $0.12 per case): an A/B on dev and held-out showed identical decisions at 36%
-lower cost, so the routing was switched.
+**Case accuracy:** held-out **15/17 (88.2%)**; dev **14/17 (82.4%)**. Case accuracy is separate from the document scores above.
+
+The official rows were replayed in **OCR-first** mode (`MEDISHIELD_VISION=auto`), the same setting the live AWS deployment
+uses, mostly from the response cache (held-out: 114 of 133 model calls cached; $0.22 actually spent for both splits). Costs
+are uncached equivalents from recorded usage: about $0.08/case. Graph latency in a cache-assisted replay (held-out p50 5.5 s,
+p95 7.0 s, setup excluded) is **not cold latency**; a live 5-document case takes about a minute. Each run records its
+provenance (mode, cache, prefetch) in `docs/eval_results/`.
 
 **Why two decision columns?** The instructors' generator records a few labels it never draws: three "tampered" IDs, one name
 mismatch and one structuring fraud ([docs/dataset_findings.md](docs/dataset_findings.md)). No system can see those, so I report
@@ -43,7 +50,7 @@ Robustness:
 - **Assistant red team:** 10 role-escalation and injection attacks, 0 failures. An admin control run proves the role boundary,
   not weak search, is what blocks them ([docs/chat_redteam.md](docs/chat_redteam.md)).
 - **Calibration:** confidence was mapped onto observed accuracy with isotonic regression fitted on dev. Held-out ECE (expected
-  calibration error) fell from 0.135 to 0.015.
+  calibration error) is 0.098 raw and 0.018 after the dev-fitted mapping. This is synthetic held-out evidence, not a guarantee on new scans.
 
 ## Architecture
 
@@ -85,9 +92,9 @@ flowchart LR
 | Ingestion API | FastAPI multipart upload or direct-to-S3 signed forms; PNG/JPEG/PDF/TIFF; magic-byte checks, size and page limits, PDF→pages, idempotency keys. Email too: `POST /intake/email` (.eml) and optional SES inbound mail from allow-listed senders ([docs/aws.md](docs/aws.md#email-intake-optional)) | — |
 | Classifier agent | Vision LLM + deterministic title-keyword evidence; confidence comes from **agreement × image quality**, not the model's self-report. Low confidence or UNKNOWN goes to review | Sonnet 5.5, Opus 5.5 retry |
 | OCR / pre-processor | RapidOCR (local, free) + quality metrics; extractor grounds **every field** against the OCR lines and returns `{fields, raw_text, bounding_boxes}` | RapidOCR, Sonnet 5.5 |
-| KYC agent | Member DB match, expiry **at the date of service**, typography forensics (retyped dates), advisory ELA, two-model visual tamper review, near-miss name rule | Sonnet + Opus agreement |
+| KYC agent | Each claim verifies policy number, name, DOB and active membership (no separate ID required); IDs additionally check expiry **at the date of service**, typography forensics (retyped dates), advisory ELA, two-model visual tamper review, near-miss name rule | Sonnet + Opus agreement |
 | Claims agent | ICD-10 / CPT / NPI / amount validation against the claim standard | deterministic |
-| Policy agent (RAG) | Docling ingestion → hybrid search (dense + BM25, RRF, reranked) with section/page citations; **coverage is decided by the parsed exclusion table**, and the model may only make a code *less* automatic | Sonnet 5.5 (Opus measured: same accuracy, higher cost) |
+| Policy agent (RAG) | Docling ingestion → hybrid search (dense + BM25, RRF, reranked) with section/page citations; **exclusions are decided by the parsed table**; approval also needs a mapped benefit and code-specific evidence; incomplete analysis goes to review | Sonnet 5.5 (Opus measured: same accuracy, higher cost) |
 | Fraud agent | Duplicate claims (claim number, member/date/amount, perceptual image hash), frequency and billing-pattern baselines from claim history, plus model-found anomalies | rules + Sonnet 5.5 |
 | Orchestrator | The brief's rules in `decision_policy.yaml` (deterministic, unit-tested); the model only writes the justification | Sonnet 5.5 |
 | Case UI | Dashboard, case detail (document viewer with evidence boxes, collapsible agent panels, live pipeline graph), review queue with override and four-eyes approval, audit log, insights, assistant | Next.js 16, shadcn, TanStack Query, React Flow |
@@ -168,7 +175,7 @@ pattern as my earlier RBAC chatbot assignment: access is enforced **where the da
 Prerequisites: [uv](https://docs.astral.sh/uv/) (installs Python 3.12), Node 24, an Anthropic API key.
 
 ```bash
-git clone https://github.com/raghav010126/medishield-capstone && cd medishield-capstone
+git clone https://github.com/raghav010126/Capstone.git medishield-capstone && cd medishield-capstone
 cp .env.example .env                 # set ANTHROPIC_API_KEY; everything else has local defaults
 uv sync                              # Python dependencies (includes Docling for policy ingestion)
 make dataset                         # generate the official dataset + ground truth (seed 42)
@@ -184,7 +191,7 @@ only when `MEDISHIELD_DEMO_USERS=1` and are never used in production.
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude access (required) |
 | `MEDISHIELD_BUDGET_USD` / `MEDISHIELD_DAILY_BUDGET_USD` | hard spend caps; model calls stop when reached |
-| `MEDISHIELD_VISION` | `auto` = OCR first, page image only when needed (25% cheaper, same accuracy); `always` = every page to the vision model |
+| `MEDISHIELD_VISION` | `always` (default) = page images to the model; `auto` = optional OCR-first mode (historical A/B ~25% cheaper). Record the chosen mode when comparing runs |
 | `MEDISHIELD_LLM_OFFLINE=1` | replay cached responses only (free, deterministic demos and tests) |
 | `JWT_SECRET`, `MEDISHIELD_ENV=production` | production refuses to start with the default secret |
 | `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` | optional tracing |
@@ -193,14 +200,21 @@ only when `MEDISHIELD_DEMO_USERS=1` and are never used in production.
 Everything else is in [.env.example](.env.example).
 
 **Tests and gates:**
-- `make test-fast` runs 195 tests offline: agents, decision engine, API and roles, audit chain, forensics, assistant access
-  boundaries.
+- `make test-fast` runs 303 tests offline: agents, decision engine, API and roles, audit chain, forensics, assistant access
+  boundaries, missing-output graph paths, claim identity and monetary validation.
 - `make test-dynamo` runs the same suite against DynamoDB.
 - `make gates` checks 21 quality gates over the published evaluation, for example decisions on visible labels ≥ 95% held-out,
   0 injection flips, calibrated ECE ≤ 0.05 and cost ≤ $0.25 per case.
 - `make e2e` runs a 22-step browser flow.
 
-GitHub Actions runs lint, both test suites, the gates and the UI builds on every push.
+GitHub Actions runs lint, both deterministic test suites, the saved-result gates and UI builds on every push. The graph safety tests run in CI; a fresh live-model benchmark does not.
+
+Offline replay setup: `make dataset`, then `uv run python scripts/preflight_replay.py --download` once with network access.
+Run `make replay-preflight` and `HF_HUB_OFFLINE=1 MEDISHIELD_LLM_OFFLINE=1 uv run pytest -q -m integration`.
+The two replay tests require cached LLM responses from an earlier evaluation; model assets alone do not provide those responses.
+
+`make eval` publishes a complete successful split and archives the previous result. Direct `eval/run_eval.py` writes a run directory; use `--publish` explicitly to update Insights, and `--no-prefetch` when measuring graph execution without prefetch.
+Do not call a cached run cold. Calibration is fitted on official dev only.
 
 ## Walkthrough: one case end to end
 
