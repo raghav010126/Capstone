@@ -16,17 +16,19 @@ This revision closes unsafe approval paths and corrects the presentation of the 
 
 | Check | Result |
 |---|---|
-| SQLite deterministic suite | 303 passed, 2 integration tests deselected |
+| SQLite deterministic suite | 303 passed, 2 integration tests deselected (also with an invalid API key) |
 | DynamoDB/moto suite | 302 passed, 1 backend-specific skip, 2 integration tests deselected |
 | Real pipeline offline replay | 2 passed: upload, OCR/RAG/graph, review/resume, duplicate detection, audit and PDF |
 | Saved evaluation artifact gates | 21/21 passed; these do not run fresh LLM evaluations |
 | Python lint | Passed |
 | Frontend ESLint, TypeScript, production build and static export | Passed |
 | Isolated browser workflow | Approve/reject/escalate visible; high-value override pending until a different senior reviewer approved; audit chain verified; auditor has no override/reclassification controls |
-| Presentation | 12 editable dark slides: 8 main + 4 appendix, ~8-minute script including a 90-second demo; package/layout/font checks passed and all slides inspected after LibreOffice rendering |
+| Presentation | 12 editable dark slides (figures updated to OCR-first on 7 Oct): 8 main + 4 appendix, ~8-minute script including a 90-second demo; package/layout/font checks passed and all slides inspected after LibreOffice rendering |
 | Sample package | 22 original labelled documents, 6 complete cases, 2 policies, fields, records and SHA-256 manifest; `make samples` reproduces it |
 
-The tests use temporary databases, uploads and ledgers. Cloud behavior was not revalidated in this revision.
+The tests use temporary databases, uploads and ledgers, and run with no model access (CI has no API key).
+
+**Live check after the AWS deploy (7 October):** two fresh cases were submitted through the website. C_007 was rejected (excluded procedure code, prescription with missing fields) and C_006 escalated (blurred prescription). Both claim forms showed the new member checks (member found, name, date of birth, active). The Insights page shows the OCR-first numbers, and the assistant answered a coverage question with a citation.
 
 ## Current evaluation and limitations
 
