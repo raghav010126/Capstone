@@ -17,6 +17,21 @@ from medishield.schemas.llm_outputs import PolicyRead
 from test_rules import GOOD_CLAIM, MEMBER, RANGES
 
 
+@pytest.fixture(autouse=True)
+def no_model_calls(monkeypatch, tmp_path):
+    """Hermetic: any model call that isn't mocked fails fast (offline, no response cache), so the fraud narrative and the
+    justification take their deterministic fallbacks on every machine instead of reaching the API or a local cache."""
+    from medishield.config import get_settings
+
+    monkeypatch.setenv("MEDISHIELD_LLM_OFFLINE", "1")
+    monkeypatch.setenv("MEDISHIELD_LLM_CACHE", "0")
+    monkeypatch.setenv("MEDISHIELD_TRACING", "0")
+    monkeypatch.setenv("MEDISHIELD_LEDGER_PATH", str(tmp_path / "spend.jsonl"))
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 def extraction(values=None):
     return ExtractionResult(doc_type=DocType.CLAIM_FORM, values=deepcopy(GOOD_CLAIM if values is None else values),
                             fields=[], raw_text="", bounding_boxes=[], grounding_rate=1, support_rate=1, confidence=.95)
