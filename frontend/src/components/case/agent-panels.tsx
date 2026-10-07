@@ -117,9 +117,9 @@ export function AgentPanels({ doc, detail }: { doc: DocumentOut; detail: CaseDet
         <KV k="Grounding">Every value is matched back to the OCR text; unmatched values lower confidence and are marked unverified.</KV>
       </Panel>
       {doc.kyc && (
-        <Panel title="KYC" icon={<Fingerprint className="size-4" />} run={runs.kyc_visual} summary={doc.kyc.kyc_passed ? "passed" : "failed"} defaultOpen={!doc.kyc.kyc_passed}>
+        <Panel title="KYC" icon={<Fingerprint className="size-4" />} run={doc.doc_type === "ID_DOCUMENT" ? runs.kyc_visual : runs.kyc} summary={doc.kyc.kyc_passed ? "passed" : doc.kyc.flags.length ? "failed" : "needs review"} defaultOpen={!doc.kyc.kyc_passed}>
           <KV k="Result">
-            <Tag tone={doc.kyc.kyc_passed ? "good" : "bad"}>{doc.kyc.kyc_passed ? "Identity verified" : "Failed"}</Tag>
+            <Tag tone={doc.kyc.kyc_passed ? "good" : doc.kyc.flags.length ? "bad" : "warn"}>{doc.kyc.kyc_passed ? "Identity verified" : doc.kyc.flags.length ? "Failed" : "Identity needs review"}</Tag>
             {doc.kyc.flags.map((f) => <Tag key={f} tone="bad">{f}</Tag>)}
             {(doc.kyc.warnings ?? []).map((f) => <Tag key={f} tone="warn">{f}</Tag>)}
           </KV>

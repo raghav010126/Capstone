@@ -10,6 +10,7 @@ import re
 import threading
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from qdrant_client import QdrantClient, models
 
@@ -64,12 +65,25 @@ class PolicyStore:
     def __init__(self, indexes: list[PolicyIndex], rerank_model: str | None = None):
         from fastembed import SparseTextEmbedding, TextEmbedding
         from fastembed.rerank.cross_encoder import TextCrossEncoder
+        from huggingface_hub import snapshot_download
+        from huggingface_hub.errors import LocalEntryNotFoundError
 
         cache = str(get_settings().cache_dir / "fastembed")
         self.indexes = {i.plan: i for i in indexes}
         self.chunks = {c.chunk_id: c for i in indexes for c in i.chunks}
         self.dense = TextEmbedding(DENSE_MODEL, cache_dir=cache)
-        self.sparse = SparseTextEmbedding(SPARSE_MODEL, cache_dir=cache)
+        # BM25 has no model weights. Fastembed's generic cache check expects a dummy
+        # mock.file absent from the upstream snapshot; point it at the verified stopwords
+        # snapshot so a populated cache also works with HF_HUB_OFFLINE=1.
+        sparse_options = {}
+        try:
+            snapshot = snapshot_download(SPARSE_MODEL, cache_dir=cache, local_files_only=True,
+                                         allow_patterns=["english.txt"])
+            if (Path(snapshot) / "english.txt").is_file():
+                sparse_options["specific_model_path"] = snapshot
+        except LocalEntryNotFoundError:
+            pass  # normal first-run download remains Fastembed's responsibility
+        self.sparse = SparseTextEmbedding(SPARSE_MODEL, cache_dir=cache, **sparse_options)
         self.reranker = TextCrossEncoder(rerank_model or RERANK_MODEL, cache_dir=cache)
         self.client = QdrantClient(":memory:")
         dim = len(next(iter(self.dense.embed(["dim"]))))

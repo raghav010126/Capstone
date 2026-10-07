@@ -24,7 +24,13 @@ gold:               ## retrieval gold set, built from the policy text
 	$(PY) python eval/build_retrieval_gold.py data/official
 
 eval:               ## SPLIT=dev|heldout|all|test20 DATASET=data/official|data/corrected|data/seed7|... -> docs/eval_results/*.json
-	$(PY) python eval/run_eval.py --split $(or $(SPLIT),dev) --dataset $(or $(DATASET),data/official)
+	$(PY) python eval/run_eval.py --split $(or $(SPLIT),dev) --dataset $(or $(DATASET),data/official) --publish
+
+replay-preflight:   ## verify OCR, policy and retrieval model assets without model API calls
+	$(PY) python scripts/preflight_replay.py
+
+samples:            ## reproducible synthetic test documents, labels and both policies
+	$(PY) python scripts/package_samples.py
 
 lint:
 	$(PY) ruff check backend/src eval datagen

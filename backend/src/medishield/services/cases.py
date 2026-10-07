@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -115,9 +116,10 @@ def case_total(docs: list) -> float:
         if d.doc_type == DocType.CLAIM_FORM.value and d.extraction:
             v = d.extraction["values"]
             key = norm_claim_no(v.get("claim_number")) or d.doc_id
-            if key not in seen and v.get("total_charge"):
+            amount = v.get("total_charge")
+            if key not in seen and isinstance(amount, (int, float)) and math.isfinite(amount) and amount > 0:
                 seen.add(key)
-                total += float(v["total_charge"])
+                total += amount
     return round(total, 2)
 
 

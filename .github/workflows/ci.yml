@@ -28,11 +28,11 @@ jobs:
           uv run python datagen/records.py data/official
       - name: Lint
         run: uv run ruff check backend/src eval datagen scripts
-      - name: Tests (SQLite)
+      - name: Tests (SQLite, including graph failure paths)
         run: uv run pytest -q -m "not integration"
       - name: Tests (DynamoDB, moto)
         run: MEDISHIELD_TEST_DB=dynamodb uv run pytest -q -m "not integration"
-      - name: Quality gates over the published evaluation
+      - name: Saved evaluation artifact gates (no fresh model calls)
         run: uv run python eval/gates.py
 
   frontend:

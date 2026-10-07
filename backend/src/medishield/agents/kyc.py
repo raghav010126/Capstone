@@ -183,6 +183,41 @@ def verify_id(doc_id: str, path: str, ext: ExtractionResult, ctx: CaseContext, r
     return res, vrun
 
 
+def verify_claim(ext: ExtractionResult, records: Records) -> KycResult:
+    """A claim needs a matching active member record, but does not require a separate ID.
+
+    Never fall back to a name lookup when the submitted policy number is unknown.
+    Uncertain identity goes to review; confirmed inactive membership remains a hard failure.
+    """
+    v = ext.values
+    member = records.by_policy.get((v.get("policy_number") or "").strip().upper())
+    checks = [Check(name="member_found", passed=member is not None, detail="claim policy number")]
+    flags, warnings = [], []
+    if member is None:
+        warnings.append("member_not_verified")
+    else:
+        ns = name_score(v.get("patient_name"), member["full_name"])
+        name_ok = ns >= NAME_MIN and not name_variant(v.get("patient_name"), member["full_name"])
+        dob_ok = bool(iso_dob(v.get("patient_dob"))) and iso_dob(v.get("patient_dob")) == member["dob"]
+        checks.extend([
+            Check(name="name_match", passed=name_ok, detail=f"claim vs member record: score {ns:.0f}"),
+            Check(name="dob_match", passed=dob_ok, detail="claim vs member record"),
+            Check(name="member_active", passed=member.get("status") == "ACTIVE", detail="member record status"),
+        ])
+        if not name_ok:
+            warnings.append("name_not_verified")
+        if not dob_ok:
+            warnings.append("dob_not_verified")
+        if member.get("status") == "INACTIVE":
+            flags.append("member_inactive")
+        elif member.get("status") != "ACTIVE":
+            warnings.append("member_status_not_verified")
+    passed = not flags and not warnings
+    return KycResult(kyc_passed=passed, flags=flags, warnings=warnings,
+                     confidence=ext.confidence if passed else min(ext.confidence, 0.5),
+                     member_id=member["member_id"] if member else None, checks=checks)
+
+
 def verify_amendment(ext: ExtractionResult, ctx: CaseContext, records: Records) -> KycResult:
     """KYC-lite: the requesting policyholder must be a known member whose name/DOB match the record."""
     v = ext.values
@@ -223,4 +258,6 @@ def run_kyc(doc_id: str, path: str, doc_type: DocType, ext: ExtractionResult, ct
     """LLM failures propagate; the graph records the agent as failed (confidence 0 -> ESCALATE)."""
     if doc_type == DocType.ID_DOCUMENT:
         return verify_id(doc_id, path, ext, ctx, records, tamper_policy_reject, quality)
+    if doc_type == DocType.CLAIM_FORM:
+        return verify_claim(ext, records), AgentRun(agent="kyc")
     return verify_amendment(ext, ctx, records), AgentRun(agent="kyc")

@@ -142,7 +142,7 @@ def specialists(task: DocTask, config: RunnableConfig) -> dict:
     ext = ExtractionResult.model_validate(p["extraction"])
     tamper_reject = load_policy().get("tamper_action", "REJECT") == "REJECT"
     try:
-        if dtype in (DocType.ID_DOCUMENT, DocType.POLICY_AMENDMENT):
+        if dtype in (DocType.CLAIM_FORM, DocType.ID_DOCUMENT, DocType.POLICY_AMENDMENT):
             quality = QualityMetrics.model_validate(p["quality"]) if p.get("quality") else None
             k, run = kyc_agent.run_kyc(doc_id, path, dtype, ext, ctx, records, tamper_reject, quality)
             out["kyc"] = k.model_dump(mode="json")

@@ -48,7 +48,7 @@ code, decide coverage under the member's plan using ONLY the policy excerpts pro
 def plan_for(policy_number: str | None) -> str | None:
     if not policy_number:
         return None
-    p = policy_number.upper()
+    p = policy_number.strip().upper()
     return next((plan for pre, plan in PLAN_PREFIX.items() if p.startswith(pre)), None)
 
 
@@ -98,28 +98,37 @@ def run_policy(ext: ExtractionResult, ctx: CaseContext, records: Records, store:
     lines = [ln for ln in v.get("service_lines") or [] if ln.get("cpt")]
     codes = list(dict.fromkeys(ln["cpt"].strip().upper() for ln in lines))
     desc = {ln["cpt"].strip().upper(): ln.get("description") for ln in lines}
-    ranges = store.ranges(plan) if plan else []
+    available = plan in store.indexes
+    ranges = store.ranges(plan) if available else []
 
     # 1) deterministic exclusion index
     table: dict[str, list] = {c: lookup(c, ranges) for c in codes}
     # 2) retrieval per code (plan-filtered hybrid + rerank)
     retrieved: list[RetrievedChunk] = []
     context_chunks: dict[str, object] = {}
-    for c in codes:
+    retrieval_errors: list[str] = []
+    for c in codes if available else []:
         kind, hint = service_type(c)
         q = f"CPT {c} {desc.get(c) or ''}. Service type: {kind}. {hint}"
-        for rank, h in enumerate(store.search(q, plan, k=TOP_K), 1):
+        try:
+            hits = store.search(q, plan, k=TOP_K)
+        except (RuntimeError, ValueError, OSError) as e:
+            retrieval_errors.append(f"{c}: retrieval unavailable ({type(e).__name__})")
+            hits = []
+        for rank, h in enumerate(hits, 1):
+            if h.chunk.plan != plan:
+                continue
             retrieved.append(RetrievedChunk(query_code=c, rank=rank, chunk_id=h.chunk.chunk_id, plan=h.chunk.plan,
                                             section=h.chunk.section, page=h.chunk.pages[0] if h.chunk.pages else None,
                                             score=round(h.score, 3), text=h.chunk.text[:400]))
             context_chunks[h.chunk.chunk_id] = h.chunk
-    rows = benefit_rows(store, plan) if plan else {}
+    rows = benefit_rows(store, plan) if available else {}
 
     # 3) Opus reasoning over the evidence
     run = AgentRun(agent="policy")
     llm: dict[str, object] = {}
     summary = ""
-    if codes and plan:
+    if codes and available and context_chunks:
         excerpts = "\n\n".join(f"[{c.chunk_id}] {c.section} (p.{c.pages[0] if c.pages else '?'})"
                                f"{' > ' + c.subsection if c.subsection else ''}\n{c.text}"
                                for c in context_chunks.values())
@@ -155,12 +164,14 @@ def run_policy(ext: ExtractionResult, ctx: CaseContext, records: Records, store:
                 disagreements += 1
         elif prior:
             status, cite = CoverageStatus.CONDITIONAL, f"4.1: {prior[0].label} {prior[0].category} ({prior[0].basis})"
-        elif r_llm is None:
-            status, cite = CoverageStatus.COVERED, "not in exclusion table 4.1 (LLM analysis unavailable)"
+        elif r_llm is None or not any(h.query_code == c for h in retrieved):
+            status, cite = CoverageStatus.CONDITIONAL, "coverage evidence incomplete; human policy review required"
         elif r_llm.coverage_status == "NOT_COVERED":
             status = CoverageStatus.CONDITIONAL       # prose exclusion without a table code -> review, not denial
             cite = f"{r_llm.citation_section} p.{r_llm.citation_page}: {r_llm.rationale}"
             disagreements += 1
+        elif r_llm.coverage_status == "COVERED" and (not row or not r_llm.citation_section or r_llm.conditions):
+            status, cite = CoverageStatus.CONDITIONAL, "benefit mapping or conditions unresolved; human policy review required"
         else:
             status = CoverageStatus(r_llm.coverage_status)
             cite = f"{r_llm.citation_section} p.{r_llm.citation_page}: {r_llm.rationale}"
@@ -171,15 +182,15 @@ def run_policy(ext: ExtractionResult, ctx: CaseContext, records: Records, store:
 
     statuses = {p.status for p in per_code}
     overall = (CoverageStatus.NOT_COVERED if CoverageStatus.NOT_COVERED in statuses else
-               CoverageStatus.CONDITIONAL if CoverageStatus.CONDITIONAL in statuses else CoverageStatus.COVERED)
+               CoverageStatus.CONDITIONAL if not statuses or CoverageStatus.CONDITIONAL in statuses else CoverageStatus.COVERED)
     deciding = next((p for p in per_code if p.status == overall), per_code[0] if per_code else None)
     pcts = [p.coverage_percentage for p in per_code if p.coverage_percentage is not None]
-    if not plan:
+    if not available or not codes:
         conf = 0.4
     elif overall == CoverageStatus.NOT_COVERED:
         conf = 0.95 if disagreements == 0 else 0.85
     elif not llm:
-        conf = 0.7
+        conf = 0.5
     else:
         conf = 0.92 if disagreements == 0 else 0.75
     result = PolicyResult(
@@ -189,5 +200,6 @@ def run_policy(ext: ExtractionResult, ctx: CaseContext, records: Records, store:
         exclusions=[f"{p.code}: {p.matched_range} {p.exclusion_basis}" for p in per_code
                     if p.status == CoverageStatus.NOT_COVERED],
         per_code=per_code, plan=plan, retrieved=retrieved, confidence=conf,
-        rationale=summary)
+        rationale="; ".join(filter(None, [summary, *retrieval_errors,
+                            "policy plan unavailable" if not available else ""])))
     return result, run

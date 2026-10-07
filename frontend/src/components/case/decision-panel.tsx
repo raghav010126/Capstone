@@ -46,7 +46,7 @@ export function DecisionPanel({ detail }: { detail: CaseDetail }) {
         <div>
           <div className="mb-1 text-xs font-medium text-muted-foreground">Justification</div>
           <p className="text-sm leading-relaxed">{detail.decision.justification}</p>
-          <p className="mt-1.5 text-[11px] text-muted-foreground">Written by a model to explain a decision made by the rule engine; it cannot change the decision.</p>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">The rule engine makes the decision. This explanation may use a model or a rule-based fallback.</p>
         </div>
       )}
 

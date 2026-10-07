@@ -31,7 +31,7 @@ type CalSummary = { n: number; accuracy: number; raw: CalBlock; calibrated?: Cal
 type Summary = { business_impact: { baseline_annual_cost_usd: number; baseline_cost_per_document_usd: number; projected_annual_cost_usd: number; projected_annual_savings_usd: number; assumptions: string }; stp_rate: number | null; decided: number }
 
 const TYPE = (t: string) => t.replace("_", " ").toLowerCase().replace(/^./, (c) => c.toUpperCase())
-const pct1 = (v: number) => `${(v * 100).toFixed(1)}%`
+const pct1 = (v: number | null) => v == null ? "N/A" : `${(v * 100).toFixed(1)}%`
 
 function Scorecard({ label, weight, value, shown, target, targetLabel, n }: { label: string; weight: string; value: number; shown: string; target: number; targetLabel: string; n: string }) {
   const met = value >= target
@@ -117,17 +117,17 @@ export default function InsightsPage() {
             <b className="text-foreground">
               {r.dataset} · {r.split} split
             </b>{" "}
-            · {r.ops.cases} cases, {r.ops.docs} documents · run {new Date(r.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}. Prompts are tuned on the dev split only; held-out results are reported separately and never tuned on.
+            · {r.ops.cases} cases, {r.ops.docs} documents · run {new Date(r.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}. Synthetic benchmark results; separate document and case scores. These are saved evaluation artifacts, not a live production accuracy estimate.
           </p>
 
           <section aria-label="Scorecard" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Scorecard label="Classification" weight="20%" value={r.classification.accuracy} shown={pct1(r.classification.accuracy)} target={0.97} targetLabel="97%" n={`${r.classification.n} documents`} />
             <Scorecard label="Extraction" weight="20%" value={r.extraction.rubric_claim_completeness} shown={pct1(r.extraction.rubric_claim_completeness)} target={0.95} targetLabel="95%" n={`${r.extraction.rubric_n} claim fields`} />
             <Scorecard label="Policy retrieval (Recall@3)" weight="15%" value={r.retrieval["recall@3"]} shown={pct1(r.retrieval["recall@3"])} target={0.9} targetLabel="90%" n={`MRR ${r.retrieval.mrr}`} />
-            <Scorecard label="Decision correctness" weight="25%" value={r.decision.accuracy_visible} shown={pct1(r.decision.accuracy_visible)} target={0.9} targetLabel="90%" n={`${r.decision.n_visible} visible labels`} />
+            <Scorecard label="Decision correctness" weight="25%" value={r.decision.accuracy_all} shown={pct1(r.decision.accuracy_all)} target={0.9} targetLabel="90%" n={`${r.decision.n_all} all labels`} />
           </section>
           <p className="-mt-3 text-xs text-muted-foreground">
-            Decision accuracy on <i>all</i> {r.decision.n_all} labels is {pct1(r.decision.accuracy_all)}; the difference is documents whose label is never drawn on the page in the dataset (tampering, a name mismatch, a hidden structuring signal).
+            Case accuracy: <b>{pct1(r.cases.accuracy)}</b> across {r.cases.n} cases. Visible-label document accuracy: {pct1(r.decision.accuracy_visible)} across {r.decision.n_visible} documents. The main score includes every label, including dataset findings not drawn on the page.
           </p>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -188,8 +188,8 @@ export default function InsightsPage() {
           <div>
             <h2 className="mb-3 text-sm font-semibold">Speed and cost</h2>
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Kpi label="Time to decision (median)" icon={<Timer className="size-4" />} value={`${r.ops.case_latency_s.p50}s`} hint={`p95 ${r.ops.case_latency_s.p95}s · ${r.ops.cache_hits} of ${r.ops.llm_calls} model calls replayed from cache, so a fully cold case is slower`} tone="good" />
-              <Kpi label="Model cost per case" icon={<Coins className="size-4" />} value={money(r.ops.cold_cost_per_case_usd)} hint="uncached, measured" />
+              <Kpi label="Graph latency (median)" icon={<Timer className="size-4" />} value={`${r.ops.case_latency_s.p50}s`} hint={`p95 ${r.ops.case_latency_s.p95}s · ${r.ops.cache_hits} of ${r.ops.llm_calls} model calls replayed; setup and prefetch excluded`} tone="good" />
+              <Kpi label="Model cost per case" icon={<Coins className="size-4" />} value={money(r.ops.cold_cost_per_case_usd)} hint="uncached equivalent from recorded usage" />
               <Kpi label="Model cost per document" icon={<Coins className="size-4" />} value={money(r.ops.cold_cost_per_doc_usd)} hint={`${r.ops.llm_calls} model calls in this run`} />
               <Kpi label="Fields found on the page" icon={<Clock className="size-4" />} value={pct1(r.ops.mean_grounding_rate)} hint="extracted values matched to OCR text" />
             </div>

@@ -13,11 +13,14 @@ Usage: python eval/run_eval.py --split dev [--dataset data/official] [--workers 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import shutil
+import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -25,8 +28,10 @@ sys.path.insert(0, str(REPO / "eval"))
 
 import calibration as CAL
 import metrics as M
+from medishield.config import get_settings
 from medishield.graph.build import perceive
 from medishield.llm import ledger
+from medishield.llm.routing import ROUTES, route
 from medishield.pipeline import run_case
 from medishield.rag.retrieve import get_store
 from medishield.records import load_records
@@ -79,15 +84,30 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--cases", default="")
     ap.add_argument("--report", default="", help="also write this markdown report (default: only the published JSON)")
+    ap.add_argument("--prefetch", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--publish", action="store_true", help="publish a complete split after success, archiving the previous result")
+    ap.add_argument("--calibrator", default=str(REPO / "docs/eval_results/calibrator.json"))
     args = ap.parse_args()
 
     root = Path(args.dataset)
     meta, labels, fields_gt = load(root)
     cases = select(meta, labels, args.split, set(filter(None, args.cases.split(","))) or None)
+    if not cases:
+        ap.error("no cases selected")
+    if args.publish and args.cases:
+        ap.error("partial runs cannot be published")
+    started = datetime.now(UTC)
+    out_dir = REPO / "eval" / "runs" / f"{started:%Y%m%d-%H%M%S-%f}-{root.name}-{args.split}"
+    out_dir.mkdir(parents=True, exist_ok=False)
     records = load_records(root)
+    setup_start = time.perf_counter()
     store = get_store()
+    setup_seconds = time.perf_counter() - setup_start
     spend0 = ledger().total
-    prefetch(root, cases, records, args.workers)
+    prefetch_start = time.perf_counter()
+    if args.prefetch:
+        prefetch(root, cases, records, args.workers)
+    prefetch_seconds = time.perf_counter() - prefetch_start
 
     rows, case_rows, runs = [], [], []
     t0 = time.time()
@@ -119,14 +139,15 @@ def main() -> None:
     elapsed = time.time() - t0
 
     # confidence calibration: fitted on the dev split only, applied unchanged everywhere else
-    cal_path = REPO / "docs" / "eval_results" / "calibrator.json"
+    cal_path = Path(args.calibrator)
     pairs = {"all": rows, "visible": [r for r in rows if r["visible"]]}
     fit_here = args.split == "dev" and root.name == "official" and not args.cases
     if fit_here:
-        cal_path.parent.mkdir(exist_ok=True)
-        CAL.Isotonic.fit([r["confidence"] for r in pairs["all"]],
-                         [r["pred_decision"] == r["expected_decision"] for r in pairs["all"]]).save(cal_path)
-    calibrator = CAL.Isotonic.load(cal_path)
+        calibrator = CAL.Isotonic.fit([r["confidence"] for r in pairs["all"]],
+                                      [r["pred_decision"] == r["expected_decision"] for r in pairs["all"]])
+        calibrator.save(out_dir / "calibrator.json")
+    else:
+        calibrator = CAL.Isotonic.load(cal_path)
     calibration = {k: CAL.summary([r["confidence"] for r in v], [r["pred_decision"] == r["expected_decision"] for r in v], calibrator)
                    for k, v in pairs.items()}
     calibration["fitted_on_this_split"] = fit_here          # True => the "calibrated" numbers are in-sample (optimistic)
@@ -134,12 +155,26 @@ def main() -> None:
     gold = json.loads((REPO / "eval" / "retrieval_gold.json").read_text())
     cls_ok = [r["pred_type"] == r["true_type"] for r in rows]
     result = {
-        "split": args.split, "dataset": root.name, "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "split": args.split, "dataset": root.name, "timestamp": started.isoformat(timespec="seconds"),
+        "provenance": {
+            "scoring_version": 2,
+            "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip(),
+            "tracked_diff_sha256": hashlib.sha256(subprocess.check_output(["git", "diff", "HEAD"], cwd=REPO)).hexdigest(),
+            "dataset_labels_sha256": hashlib.sha256((root / "ground_truth/labels.json").read_bytes()).hexdigest(),
+            "llm_offline": get_settings().llm_offline, "llm_cache_enabled": get_settings().llm_cache,
+            "vision_mode": get_settings().vision_mode, "text_extract": get_settings().text_extract,
+            "model_routes": {step: route(step).model for step in ROUTES},
+            "prefetch_enabled": args.prefetch, "setup_seconds": round(setup_seconds, 2),
+            "prefetch_seconds": round(prefetch_seconds, 2),
+            "latency_scope": "graph only; excludes setup and prefetch; includes cached calls",
+            "calibrator_source": str(out_dir / "calibrator.json" if fit_here else cal_path),
+        },
         "classification": {"accuracy": round(sum(cls_ok) / len(cls_ok), 4), "n": len(cls_ok),
                            "wrong": [f"{r['doc_id']}: {r['true_type']} -> {r['pred_type']}" for r in rows
                                      if r["pred_type"] != r["true_type"]]},
         "extraction": M.score_extraction(rows, fields_gt),
-        "retrieval": M.score_retrieval(rows, gold),
+        "retrieval": M.score_retrieval(rows, gold, fields_gt,
+                                      member_plans={k: m["plan"].lower() for k, m in records.by_policy.items()}),
         "decision": M.score_decisions(rows),
         "cases": M.score_cases(case_rows),
         "fraud": M.score_fraud(rows),
@@ -150,14 +185,24 @@ def main() -> None:
         "spend_this_run_usd": round(ledger().total - spend0, 4),
         "graph_seconds": round(elapsed, 1),
     }
-    out_dir = REPO / "eval" / "runs" / f"{datetime.now():%Y%m%d-%H%M%S}-{root.name}-{args.split}"
-    out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "results.json").write_text(json.dumps(result, indent=1, default=str))
     (out_dir / "rows.json").write_text(json.dumps(rows, indent=1, default=str))
-    if not args.cases:                         # full-split runs are published for the Insights page
+    (out_dir / "cases.json").write_text(json.dumps(case_rows, indent=1, default=str))
+    if args.publish:
         pub = REPO / "docs" / "eval_results"
         pub.mkdir(exist_ok=True)
-        (pub / f"{root.name}-{args.split}.json").write_text(json.dumps(result, indent=1, default=str))
+        archive = pub / "history" / out_dir.name
+        archive.mkdir(parents=True)
+        target = pub / f"{root.name}-{args.split}.json"
+        if target.exists():
+            shutil.copy2(target, archive / target.name)
+        if fit_here:
+            if cal_path.exists():
+                shutil.copy2(cal_path, archive / "calibrator.json")
+            shutil.copy2(out_dir / "calibrator.json", cal_path)
+        temporary = target.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(result, indent=1, default=str))
+        temporary.replace(target)
     if args.report:
         from report import write_report
 

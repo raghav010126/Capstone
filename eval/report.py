@@ -20,8 +20,10 @@ def render(r: dict, level: int = 1) -> list[str]:
     w = L.append
     w(f"{'#' * level} {r['dataset']} / {r['split']} split")
     w("")
-    w(f"_Generated {r['timestamp']} by `make eval`. Prompts are tuned on the dev split only; "
-      "held-out and seed-7 numbers are reported without tuning._")
+    w(f"_Generated {r['timestamp']}. Synthetic benchmark; document and case scores are reported separately._")
+    if p := r.get("provenance"):
+        w(f"Scoring version {p['scoring_version']}; offline replay: {p['llm_offline']}; "
+          f"prefetch: {p['prefetch_enabled']}. Latency scope: {p['latency_scope']}.")
     w("")
     w(f"{'#' * (level + 1)} Rubric metrics")
     w("")
@@ -93,7 +95,7 @@ def render(r: dict, level: int = 1) -> list[str]:
     w(f"{'#' * (level + 1)} Operations")
     w("")
     w(f"- Cases: {op['cases']}, documents: {op['docs']}")
-    w(f"- Case latency (cold path incl. LLM): p50 {op['case_latency_s']['p50']}s, "
+    w(f"- Graph latency (cache/prefetch assisted; setup and prefetch excluded): p50 {op['case_latency_s']['p50']}s, "
       f"p95 {op['case_latency_s']['p95']}s")
     w(f"- Cost without cache: ${op['cold_cost_usd']:.2f} total, ${op['cold_cost_per_case_usd']:.3f}/case, "
       f"${op['cold_cost_per_doc_usd']:.3f}/document. Spent this run: ${r['spend_this_run_usd']:.2f}")

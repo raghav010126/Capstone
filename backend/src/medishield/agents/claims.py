@@ -10,6 +10,7 @@ Discharge summaries and prescriptions get a lighter rule set ("claims-lite").
 
 from __future__ import annotations
 
+import math
 import re
 
 from medishield.records import parse_date
@@ -71,11 +72,23 @@ def validate_claim(v: dict) -> tuple[list[str], list[str], dict]:
         elif c in UNLISTED_CPT:
             warnings.append(f"cpt: unlisted/combined code {c}")
     _npi(v.get("provider_npi"), errors, warnings, "provider_npi")
-    charges = [ln["charge"] for ln in lines if ln.get("charge") is not None]
+    def valid_amount(value) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+
+    charges = []
+    for i, ln in enumerate(lines, 1):
+        charge = ln.get("charge")
+        if not valid_amount(charge):
+            errors.append(f"service_line {i}: charge must be a finite nonnegative amount")
+        else:
+            charges.append(charge)
     total = v.get("total_charge")
     if total is None:
         errors.append("total_charge: missing")
-    elif charges and abs(sum(charges) - total) > 0.01:
+    elif not valid_amount(total) or total == 0:
+        errors.append("total_charge: must be a finite positive amount")
+        total = None
+    elif len(charges) == len(lines) and charges and abs(sum(charges) - total) > 0.01:
         warnings.append(f"total_mismatch: lines sum {sum(charges):.2f} != total {total:.2f}")
     fields = {"form_type": v.get("form_type"), "claim_number": v.get("claim_number"),
               "service_date": v.get("service_date"), "icd_codes": icds, "cpt_codes": cpts,

@@ -36,6 +36,20 @@ def build_facts(doc_id: str, cls: Classification, ext: ExtractionResult | None, 
                 claims: ClaimsResult | None, policy: PolicyResult | None, fraud: FraudResult | None,
                 failed: list[str]) -> Facts:
     f = Facts(doc_unknown=cls.doc_type == DocType.UNKNOWN, classifier_confidence=cls.confidence)
+    required = {"extractor": ext, "fraud": fraud}
+    if cls.doc_type in (DocType.CLAIM_FORM, DocType.ID_DOCUMENT, DocType.POLICY_AMENDMENT):
+        required["kyc"] = kyc
+    if cls.doc_type in (DocType.CLAIM_FORM, DocType.DISCHARGE_SUMMARY, DocType.PRESCRIPTION):
+        required["claims"] = claims
+    if cls.doc_type == DocType.CLAIM_FORM:
+        required["policy"] = policy
+    missing = [name for name, result in required.items() if result is None] if not f.doc_unknown else []
+    if missing:
+        f.flags.add("agent_failed")
+        f.reasons.append("required checks unavailable: " + ", ".join(missing))
+    if fraud is not None and doc_id not in fraud.per_doc_score and not f.doc_unknown:
+        f.flags.add("agent_failed")
+        f.reasons.append("fraud check has no score for this document")
     if f.doc_unknown:
         f.reasons.append(f"classified UNKNOWN ({cls.reason})")
     if cls.confidence < 0.6:
@@ -50,6 +64,9 @@ def build_facts(doc_id: str, cls: Classification, ext: ExtractionResult | None, 
         if hard:
             f.flags.add("kyc_failed")
             f.reasons.append("KYC failed: " + ", ".join(hard))
+        elif not kyc.kyc_passed and not kyc.flags:
+            f.flags.add("agent_failed")
+            f.reasons.append("member identity not verified; human review required")
         if "tamper_suspected" in kyc.flags:
             f.flags.add("tamper_suspected")
             f.reasons.append("visual tampering suspected (two-model agreement)")

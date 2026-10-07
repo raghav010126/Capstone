@@ -71,9 +71,10 @@ def score_extraction(rows: list[dict], fields_gt: dict) -> dict:
     misses: list[str] = []
     for r in rows:
         gt = fields_gt.get(r["doc_id"])
-        if gt is None or r.get("values") is None or r["pred_type"] != r["true_type"]:
+        if gt is None:
             continue
-        got = extracted_view(r["true_type"], r["values"])
+        got = (extracted_view(r["true_type"], r["values"])
+               if r.get("values") is not None and r["pred_type"] == r["true_type"] else {})
         for f, g in gt.items():
             if f in SKIP_GT or g is None or g == []:
                 continue
@@ -92,20 +93,32 @@ def score_extraction(rows: list[dict], fields_gt: dict) -> dict:
             "misses": misses}
 
 
-def score_retrieval(rows: list[dict], gold: dict, k: int = 3) -> dict:
+def score_retrieval(rows: list[dict], gold: dict, fields_gt: dict, k: int = 3,
+                    member_plans: dict[str, str] | None = None) -> dict:
+    """Score expected claim-code queries, including missing outputs and wrong-plan retrievals."""
+    from medishield.agents.policy import plan_for
+
     hits, rr, n, misses = 0, 0.0, 0, []
     for r in rows:
-        pol = r.get("policy")
-        if not pol or not pol.get("plan"):
+        if r["true_type"] != "CLAIM_FORM":
             continue
-        plan_gold = gold["plans"].get(pol["plan"], {})
+        gt = fields_gt.get(r["doc_id"], {})
+        number = (gt.get("policy_number") or "").strip().upper()
+        expected_plan = (member_plans or {}).get(number) or plan_for(number)
+        expected_codes = list(dict.fromkeys(str(c).strip().upper() for c in gt.get("cpt_codes", []) if c))
+        if expected_codes and expected_plan not in gold["plans"]:
+            raise ValueError(f"Missing retrieval ground truth for {r['doc_id']} plan {expected_plan!r}")
+        plan_gold = gold["plans"].get(expected_plan, {})
+        pol = r.get("policy") or {}
         by_code: dict[str, list[dict]] = defaultdict(list)
-        for ch in pol["retrieved"]:
-            by_code[ch["query_code"]].append(ch)
-        for code, chunks in by_code.items():
+        for ch in pol.get("retrieved", []):
+            if pol.get("plan") == expected_plan and ch.get("plan") == expected_plan:
+                by_code[ch["query_code"]].append(ch)
+        for code in expected_codes:
+            chunks = by_code[code]
             g = plan_gold.get(code)
             if not g:
-                continue
+                raise ValueError(f"Missing retrieval ground truth for {expected_plan}:{code}")
             rel = set(g["relevant_sections"])
             ranks = [c["rank"] for c in sorted(chunks, key=lambda c: c["rank"]) if _sec(c["section"]) in rel]
             n += 1

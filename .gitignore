@@ -15,7 +15,7 @@ __pycache__/
 node_modules/
 .next/
 
-# generated data / caches (published as a release asset instead)
+# generated data / caches (the labelled sample archive is kept under docs/samples)
 dataset/
 datagen/out/
 .cache/
