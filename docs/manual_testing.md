@@ -1,4 +1,4 @@
-# Manual test script (about 20 minutes)
+# Manual test script (about 20 minutes, plus optional sections)
 
 **Live site:** https://d3064azeabhrfe.cloudfront.net
 
@@ -119,8 +119,39 @@ bold verdict, followed by short bullets with numbered citations.
 3. Scroll down to **Human review quality**. The override from section 3 appears in the AI-versus-final-decision view and in
    the override reasons.
 
+## 7. MCP server (3 min, optional)
+MediShield is also an MCP server at `https://d3064azeabhrfe.cloudfront.net/api/mcp`. Claude Code, Claude Desktop or any MCP
+client can call six read-only tools: `check_coverage`, `get_case`, `list_cases`, `review_queue`, `case_status` and
+`ask_assistant`. They run under the role of the signed-in user ([docs/mcp.md](mcp.md)).
+
+1. Get a token for **submitter**. Keep it off screen and out of shared files:
+   ```bash
+   S=https://d3064azeabhrfe.cloudfront.net
+   TOKEN=$(curl -s $S/api/auth/login -H 'content-type: application/json' \
+     -d '{"username":"submitter","password":"<password>"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+   ```
+2. **With Claude Code:** `claude mcp add --transport http medishield $S/api/mcp --header "Authorization: Bearer $TOKEN"`. Then:
+
+   | Ask Claude | Expected |
+   |---|---|
+   | `Use medishield to check whether CPT 17000 is covered on the gold plan.` | `check_coverage` → **NOT_COVERED**: table 4.1 excludes 17000–17999 (cosmetic). Decided by the parsed table, no model call |
+   | `Use medishield to show case CASE-8E813951.` | `get_case` → Rejected, with each document's rule |
+   | `Use medishield to show the review queue.` | Refused: `permission denied: role 'submitter' lacks permission 'review:queue'` |
+
+3. **With curl:** each POST is self-contained.
+   ```bash
+   curl -s $S/api/mcp -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+     -H 'accept: application/json, text/event-stream' -H 'mcp-protocol-version: 2025-06-18' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"check_coverage","arguments":{"cpt_code":"17000","plan":"gold"}}}'
+   ```
+   - The same request with `"method":"tools/list"` returns the six tools.
+   - Without the `Authorization` header you get **HTTP 401**.
+   - With a **submitter2** token, `get_case` on CASE-8E813951 answers "not found or not visible to you", so case ids can't be
+     probed.
+4. As **auditor**: **Audit log** shows each call as `mcp tool called`, with the tool name and the caller.
+
 ## What "good" looks like
 - Decisions match the rules: an excluded procedure or a missing required field is rejected, a clean case is approved, and
   anything uncertain (fraud signals, unknown documents, unverified identity, incomplete policy evidence) escalates to a person.
 - Nobody sees anything their role shouldn't, in the pages or in the assistant.
-- Every override, blocked question and refused email is in the audit log, and the chain verifies.
+- Every override, blocked question, refused email and MCP tool call is in the audit log, and the chain verifies.
