@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextvars import ContextVar
 
 from pydantic import Field
 
@@ -23,6 +24,8 @@ from medishield.phi import redact
 from medishield.schemas.common import Strict
 
 log = logging.getLogger(__name__)
+# evaluation only (eval/chat_eval.py): also return the passage texts the answer was grounded on. The API never sets it.
+_WITH_CONTEXTS: ContextVar[bool] = ContextVar("with_contexts", default=False)
 
 ANSWER_SYSTEM = """You are the MediShield claims-intake assistant, answering staff and members inside the case-management app.
 
@@ -54,7 +57,8 @@ def _result(answer: str, route: str, user: Principal, *, blocked: bool = False, 
             cited: list[int] | None = None, sql: str | None = None, conversation: str = "", how: str = "") -> dict:
     passages = passages or []
     used = [i for i in (cited or []) if 1 <= i <= len(passages)]
-    return {"answer": answer, "route": route, "blocked": blocked, "role": user.role.value, "conversation_id": conversation,
+    extra = {"contexts": [p.text for p in passages]} if _WITH_CONTEXTS.get() else {}
+    return {**extra, "answer": answer, "route": route, "blocked": blocked, "role": user.role.value, "conversation_id": conversation,
             "router": how, "sql": sql,
             "sources": [{"n": i, "kind": p.kind, "title": p.title, "url": p.url, "page": p.page, "cited": i in used}
                         for i, p in enumerate(passages, 1)],
@@ -101,7 +105,11 @@ def answer(payload: dict) -> dict:
                                  tags=["assistant", f"role:{u.get('role', '?')}"],
                                  metadata={"role": u.get("role"), "conversation": payload.get("conversation_id"),
                                            "case": payload.get("case_id")}) as finish:
-        out = _answer(payload)
+        token = _WITH_CONTEXTS.set(bool(payload.get("include_contexts")))
+        try:
+            out = _answer(payload)
+        finally:
+            _WITH_CONTEXTS.reset(token)
         finish({"answer": out["answer"], "route": out["route"], "blocked": out["blocked"]},
                route=out["route"], blocked=out["blocked"], sources=len(out["sources"]))
     return out

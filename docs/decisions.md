@@ -141,6 +141,27 @@ in-process assistant / AgentCore Runtime.
 
 **Why.** Graders can run everything with only an Anthropic key. The whole test suite also runs against DynamoDB under moto.
 
+### 13. The assistant is graded three ways, and the judge is a different model
+**Choice.**
+- Deterministic rule checks stay the primary score: refusal, route, expected facts drawn from data, no forbidden strings,
+  valid citations.
+- An LLM judge adds a rubric grade with a written justification: accuracy, completeness, refusal, citations, 1-5 each.
+  The answers come from Claude Sonnet 5.5; the judge is **Claude Opus 5.5**, so the system never grades its own writing, and it
+  is given the same passages the answer was grounded on plus the expected facts.
+- RAGAS adds faithfulness, answer relevancy, context precision and context recall.
+
+**Why.** Rules prove the hard properties (nothing leaked, refused exactly when required) but can't judge whether an answer is
+well grounded or complete. The judge and RAGAS can, and the rules keep them honest.
+
+**Safeguards.**
+- The judge **fails closed**: a malformed, missing or errored verdict is a fail, and a row passes only if the judge says so
+  and no criterion scores below 3.
+- Three planted wrong-but-confident answers must be failed every run; it caught 3/3, scoring their accuracy 1/5.
+- RAGAS runs in a `uv --with` overlay: its pins would otherwise downgrade packages the API image uses.
+
+**Cost.** About $1.50 a run (judge $0.58, RAGAS $0.90), so it runs on demand and its results are gated in CI from the
+saved artifact, not re-run on every push.
+
 ## Known limitations
 
 - **Forged IDs:** typography and visual review catch most, not all. On the corrected set, 1 of 3 forged IDs was rejected, 1

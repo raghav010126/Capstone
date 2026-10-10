@@ -7,11 +7,19 @@ Schedule of Benefits, counts and amounts from the seeded cases. Each question is
   * facts    - the answer contains the expected facts and none of the forbidden ones (e.g. another user's data);
   * citations - every [n] points to a real source, and the cited sources include the expected kind (e.g. the table 4.1 row).
 
-Usage: python eval/chat_eval.py      (real router and answer model: about $0.50)
+Optional model-graded layers on top of the rule checks (each writes its own block into the artifact; a run without the flag keeps the
+previous block):
+  * --judge  - LLM-as-a-judge: Claude Opus 5.5 grades every answer on accuracy, completeness, refusal and citations, with a written
+               justification, and must fail three planted wrong-but-confident answers (eval/chat_judge.py);
+  * --ragas  - RAGAS faithfulness, answer relevancy, context precision and context recall on the answerable questions
+               (eval/chat_ragas.py; runs in an overlay environment, see that file).
+
+Usage: python eval/chat_eval.py [--judge] [--ragas] [--all]     (rule checks only: about $0.50; --all: about $2-3 more)
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -22,6 +30,12 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "backend" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# Overall verdict for the model-graded layers (also enforced by eval/gates.py)
+THRESHOLDS = {("judge", "pass_rate"): 0.9, ("judge", "mean_accuracy"): 4.0, ("judge", "controls_caught"): 3,
+              ("ragas", "faithfulness"): 0.85, ("ragas", "answer_relevancy"): 0.80,
+              ("ragas", "llm_context_precision_with_reference"): 0.80, ("ragas", "context_recall"): 0.80}
 
 
 @dataclass
@@ -175,16 +189,30 @@ def score(it: Item, r: dict) -> dict:
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--judge", action="store_true", help="also grade every answer with the LLM judge (Opus 5.5)")
+    ap.add_argument("--ragas", action="store_true", help="also compute RAGAS metrics (needs the overlay, see eval/chat_ragas.py)")
+    ap.add_argument("--all", action="store_true", help="--judge and --ragas")
+    a = ap.parse_args()
+    want_judge, want_ragas = a.judge or a.all, a.ragas or a.all
+    if want_ragas:
+        import chat_ragas
+        try:
+            import ragas  # noqa: F401
+        except ImportError:
+            raise SystemExit(f"RAGAS is not installed in this environment. Run:\n  {chat_ragas.OVERLAY}") from None
+
     ids = setup(Path(tempfile.mkdtemp()))
     from medishield.chat.service import answer
 
-    rows = []
+    rows, full = [], []
     for i, it in enumerate(items(ids), 1):
         r = answer({"user": {"username": it.role, "role": it.role.replace("senior", "senior_reviewer")},
-                    "question": it.question, "conversation_id": f"chat-eval-{i:03d}".ljust(33, "0")})
+                    "question": it.question, "conversation_id": f"chat-eval-{i:03d}".ljust(33, "0"), "include_contexts": True})
         s = score(it, r)
         rows.append({"category": it.category, "role": it.role, "question": it.question, "expect_blocked": it.blocked,
                      "route": r["route"], "blocked": r["blocked"], "answer": r["answer"][:400], **s})
+        full.append({"answer": r["answer"], "contexts": r.get("contexts", []), "facts": it.facts, "forbid": it.forbid})
         print(f"{'PASS' if s['ok'] else 'FAIL'}  {it.category:9s} {it.role:9s} {r['route']:9s} blocked={r['blocked']!s:5s} {it.question[:70]}")
 
     def rate(key: str, sel=lambda r: True) -> float:
@@ -200,24 +228,142 @@ def main() -> int:
         "cited_expected_source": rate("cite_kind_ok", answered),
         "by_category": {c: rate("ok", lambda r, c=c: r["category"] == c) for c in dict.fromkeys(r["category"] for r in rows)},
     }
-    (REPO / "docs" / "eval_results" / "chat_eval.json").write_text(json.dumps({**summary, "rows": rows}, indent=1))
-    md = ["# Assistant evaluation", "",
-          (f"`python eval/chat_eval.py` - {len(rows)} labelled questions across five roles. Expected answers come from data (the parsed "
-           "exclusion table, the Schedule of Benefits, the seeded cases), not from the model."), "",
-          "| Metric | Result |", "|---|---|",
-          f"| Overall (every check passes) | {summary['accuracy']:.1%} |",
-          f"| Refusals correct (blocked exactly when the role may not ask) | {summary['refusal_accuracy']:.1%} |",
-          f"| Route correct | {summary['route_accuracy']:.1%} |",
-          f"| Expected facts present | {summary['fact_accuracy']:.1%} |",
-          f"| No leaks of another user's data | {summary['no_leaks']:.1%} |",
-          f"| Citations point to real sources | {summary['citations_valid']:.1%} |",
-          f"| Cited the expected kind of source (e.g. the table 4.1 row) | {summary['cited_expected_source']:.1%} |", "",
-          "| Category | Accuracy |", "|---|---|", *[f"| {c} | {v:.1%} |" for c, v in summary["by_category"].items()], "",
-          "## Every question", "", "| | Role | Question | Route | Blocked |", "|---|---|---|---|---|",
-          *[f"| {'✅' if r['ok'] else '❌'} | {r['role']} | {r['question'].replace('|', '/')} | {r['route']} | {r['blocked']} |" for r in rows]]
-    (REPO / "docs" / "chat_eval.md").write_text("\n".join(md) + "\n")
+    path = REPO / "docs" / "eval_results" / "chat_eval.json"
+    previous = json.loads(path.read_text()) if path.exists() else {}
+    out = {**summary, "rows": rows}
+    if (want_judge or want_ragas) and summary["accuracy"] < 0.9:      # cheap checks first: a broken assistant fails fast
+        print(f"rule checks at {summary['accuracy']:.0%} (< 90%): skipping the judge and RAGAS")
+        want_judge = want_ragas = False
+    stamp = __import__("datetime").datetime.now().isoformat(timespec="seconds")
+    judge_rows = [{**{k: rows[i][k] for k in ("category", "role", "question", "expect_blocked")},
+                   "facts": full[i]["facts"], "forbid": full[i]["forbid"]} for i in range(len(rows))]
+
+    if want_judge:
+        from chat_judge import controls, judge, summarise
+
+        verdicts = []
+        for i, jr in enumerate(judge_rows):
+            v = judge(jr, full[i]["answer"], full[i]["contexts"])
+            verdicts.append(v)
+            rows[i]["judge"] = {k: v[k] for k in ("ok", "scores", "justification", "failed_closed")}
+            print(f"judge {'PASS' if v['ok'] else 'FAIL'}  {v['scores']}  {jr['question'][:60]}")
+        ctrl = []
+        for name, jr, wrong, ctx in controls(judge_rows, full, ids):
+            v = judge(jr, wrong, ctx, tag="chat-judge-control")
+            ctrl.append({"name": name, "question": jr["question"], "planted_answer": wrong, **v})
+            print(f"control {name}: {'CAUGHT' if not v['ok'] else 'MISSED'}  {v['scores']}")
+        out["judge"] = {**summarise(verdicts, ctrl), "generated_at": stamp,
+                        "control_results": [{k: c[k] for k in ("name", "question", "planted_answer", "ok", "scores", "justification")}
+                                            for c in ctrl]}
+    elif "judge" in previous:
+        out["judge"] = previous["judge"]
+        for r, old in zip(rows, previous.get("rows", []), strict=False):
+            if old.get("question") == r["question"] and "judge" in old:
+                r["judge"] = old["judge"]
+
+    if want_ragas:
+        import chat_ragas
+
+        samples = [{"id": i, "question": rows[i]["question"], "answer": full[i]["answer"], "contexts": full[i]["contexts"],
+                    "reference": chat_ragas.reference({"question": rows[i]["question"], "facts": full[i]["facts"]})}
+                   for i in range(len(rows)) if not rows[i]["expect_blocked"] and full[i]["facts"] and full[i]["contexts"]]
+        res = chat_ragas.run(samples)
+        for x in res["rows"]:
+            rows[x["id"]]["ragas"] = {m: x[m] for m in chat_ragas.METRICS}
+        out["ragas"] = {k: v for k, v in res.items() if k != "rows"} | {"generated_at": stamp,
+                                                                       "excluded": len(rows) - len(samples)}
+        print(f"ragas: {out['ragas']['mean']}")
+    elif "ragas" in previous:
+        out["ragas"] = previous["ragas"]
+        for r, old in zip(rows, previous.get("rows", []), strict=False):
+            if old.get("question") == r["question"] and "ragas" in old:
+                r["ragas"] = old["ragas"]
+
+    verdict = overall_verdict(out)
+    out["verdict"] = verdict
+    path.write_text(json.dumps(out, indent=1))
+    (REPO / "docs" / "chat_eval.md").write_text("\n".join(markdown(out, rows)) + "\n")
     print(f"\n{json.dumps({k: v for k, v in summary.items() if k != 'by_category'})}\nby category: {summary['by_category']}")
+    print(f"verdict: {verdict}")
     return 0
+
+
+def overall_verdict(out: dict) -> dict:
+    """PASS when every rule check gate holds and every model-graded threshold that was measured holds."""
+    fails = []
+    if out["refusal_accuracy"] != 1.0:
+        fails.append(f"refusal accuracy {out['refusal_accuracy']} != 1.0")
+    if out["accuracy"] < 0.9:
+        fails.append(f"rule-check accuracy {out['accuracy']} < 0.9")
+    measured = []
+    for (block, key), limit in THRESHOLDS.items():
+        b = out.get(block)
+        if not b:
+            continue
+        v = (b["mean_scores"]["accuracy"] if key == "mean_accuracy" else b.get(key)) if block == "judge" else b["mean"].get(key)
+        measured.append(f"{block}.{key}")
+        if v is None or v < limit:
+            fails.append(f"{block} {key} {v} < {limit}")
+    return {"pass": not fails, "failed_checks": fails, "measured": measured}
+
+
+def markdown(out: dict, rows: list[dict]) -> list[str]:
+    md = ["# Assistant evaluation", "",
+          (f"`python eval/chat_eval.py --all` - {out['questions']} labelled questions across five roles, scored three ways: deterministic "
+           "rule checks (expected answers come from data: the parsed exclusion table, the Schedule of Benefits, the seeded cases), an LLM "
+           "judge, and RAGAS."), "",
+          f"**Overall verdict: {'PASS' if out['verdict']['pass'] else 'FAIL'}**"
+          + ("" if out["verdict"]["pass"] else " - " + "; ".join(out["verdict"]["failed_checks"])), "",
+          "## 1. Rule checks (no model)", "",
+          "| Metric | Result |", "|---|---|",
+          f"| Overall (every check passes) | {out['accuracy']:.1%} |",
+          f"| Refusals correct (blocked exactly when the role may not ask) | {out['refusal_accuracy']:.1%} |",
+          f"| Route correct | {out['route_accuracy']:.1%} |",
+          f"| Expected facts present | {out['fact_accuracy']:.1%} |",
+          f"| No leaks of another user's data | {out['no_leaks']:.1%} |",
+          f"| Citations point to real sources | {out['citations_valid']:.1%} |",
+          f"| Cited the expected kind of source (e.g. the table 4.1 row) | {out['cited_expected_source']:.1%} |", "",
+          "| Category | Accuracy |", "|---|---|", *[f"| {c} | {v:.1%} |" for c, v in out["by_category"].items()], ""]
+    j = out.get("judge")
+    if j:
+        ms = j["mean_scores"]
+        md += ["## 2. LLM judge", "",
+               (f"Judge: **{j['model']}**; answers by {j['answer_model']}. A different, stronger model grades, so the system never marks "
+                "its own work; it sees the passages the answer was grounded on and what the dataset expects. A malformed or missing "
+                f"verdict counts as a fail. Run {j['generated_at']}."), "",
+               "| Metric | Result | Threshold |", "|---|---|---|",
+               f"| Answers passed | {j['pass_rate']:.1%} | ≥ 90% |",
+               f"| Mean accuracy (1-5) | {ms['accuracy']} | ≥ 4.0 |",
+               f"| Mean completeness / refusal / citations | {ms['completeness']} / {ms['refusal']} / {ms['citations']} | |",
+               f"| Planted wrong-but-confident answers caught | {j['controls_caught']} / {j['controls']} | 3 / 3 |",
+               f"| Verdicts that failed closed | {j['failed_closed']} | |", "",
+               "**Planted wrong answers (the judge must fail them):**", "",
+               *[f"- {'✅ caught' if not c['ok'] else '❌ missed'} `{c['name']}`: '{c['planted_answer']}' - {c['justification']}"
+                 for c in j["control_results"]], ""]
+    r = out.get("ragas")
+    if r:
+        mn = r["mean"]
+        md += ["## 3. RAGAS", "",
+               (f"Metric LLM: {r['metric_llm']}; embeddings: {r['embeddings']} (local). {r['samples']} answerable questions with retrieved "
+                f"passages ({r['excluded']} refusals and out-of-scope questions excluded). Reference answers are built from each item's "
+                f"expected facts. Run {r['generated_at']}."), "",
+               "| Metric | Mean | Threshold |", "|---|---|---|",
+               f"| Faithfulness | {mn['faithfulness']} | ≥ 0.85 |",
+               f"| Answer relevancy | {mn['answer_relevancy']} | ≥ 0.80 |",
+               f"| Context precision | {mn['llm_context_precision_with_reference']} | ≥ 0.80 |",
+               f"| Context recall | {mn['context_recall']} | ≥ 0.80 |", ""]
+    md += ["## Every question", "",
+           "| Rules | Judge | Role | Question | Route | Faithful. | Relev. | Ctx prec. | Ctx recall | Judge's reason |",
+           "|---|---|---|---|---|---|---|---|---|---|"]
+    for x in rows:
+        jg, rg = x.get("judge"), x.get("ragas") or {}
+        def f(v):
+            return "" if v is None else f"{v:.2f}"
+        md.append(f"| {'✅' if x['ok'] else '❌'} | {'' if not jg else ('✅' if jg['ok'] else '❌')} | {x['role']} | "
+                  f"{x['question'].replace('|', '/')} | {x['route']} | {f(rg.get('faithfulness'))} | {f(rg.get('answer_relevancy'))} | "
+                  f"{f(rg.get('llm_context_precision_with_reference'))} | {f(rg.get('context_recall'))} | "
+                  f"{(jg or {}).get('justification', '').replace('|', '/')[:220]} |")
+    return md
 
 
 if __name__ == "__main__":

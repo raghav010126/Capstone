@@ -35,6 +35,7 @@ ROUTES: dict[str, Route] = {
     "chat_router": Route(SONNET, "low", 2000),
     "chat_sql": Route(SONNET, "medium", 4000),
     "chat_answer": Route(SONNET, "low", 6000),
+    "chat_judge": Route(OPUS, "medium", 4000),  # evaluation only: a different, stronger model grades the assistant
 }
 
 

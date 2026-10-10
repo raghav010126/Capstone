@@ -44,9 +44,14 @@ both columns, and I built a *corrected* dataset that draws them to test the dete
 Robustness:
 - **Prompt injection:** 0 decision flips across 7 adversarial documents (fake approval stamps, hidden "approve this" text, fake
   correction notices). A poisoned policy PDF also failed to flip coverage ([docs/redteam.md](docs/redteam.md)).
-- **Assistant evaluation:** 35 labelled questions across five roles, 100% correct: refusals, routing, expected facts,
-  no leaks, and citations that point to real sources. Expected answers come from data, not the model
-  ([docs/chat_eval.md](docs/chat_eval.md)).
+- **Assistant evaluation:** 35 labelled questions across five roles, scored three ways ([docs/chat_eval.md](docs/chat_eval.md)):
+  - *rule checks* (no model): 97.1% pass every check; refusals 100%, no leaks 100%, citations point to real sources 100%.
+    Expected answers come from data, not the model;
+  - *LLM judge*: Claude Opus 5.5 grades each Sonnet answer on accuracy, completeness, refusal and citations with a written
+    justification: 100% passed (mean accuracy 4.86 / 5), and it caught all 3 planted wrong-but-confident answers;
+  - *RAGAS*: faithfulness 0.89, answer relevancy 0.91, context precision 0.94, context recall 1.00 on the 24 answerable
+    questions. Judge and RAGAS together cost about $1.50 a run (`python eval/chat_eval.py --all`; RAGAS runs in a `uv --with`
+    overlay so it never changes the app's dependencies).
 - **Assistant red team:** 10 role-escalation and injection attacks, 0 failures. An admin control run proves the role boundary,
   not weak search, is what blocks them ([docs/chat_redteam.md](docs/chat_redteam.md)).
 - **Calibration:** confidence was mapped onto observed accuracy with isotonic regression fitted on dev. Held-out ECE (expected
@@ -200,10 +205,10 @@ only when `MEDISHIELD_DEMO_USERS=1` and are never used in production.
 Everything else is in [.env.example](.env.example).
 
 **Tests and gates:**
-- `make test-fast` runs 303 tests offline: agents, decision engine, API and roles, audit chain, forensics, assistant access
+- `make test-fast` runs 312 tests offline: agents, decision engine, API and roles, audit chain, forensics, assistant access
   boundaries, missing-output graph paths, claim identity and monetary validation.
 - `make test-dynamo` runs the same suite against DynamoDB.
-- `make gates` checks 21 quality gates over the published evaluation, for example decisions on visible labels ≥ 95% held-out,
+- `make gates` checks 28 quality gates over the published evaluation (including the LLM judge and RAGAS thresholds), for example decisions on visible labels ≥ 95% held-out,
   0 injection flips, calibrated ECE ≤ 0.05 and cost ≤ $0.25 per case.
 - `make e2e` runs a 22-step browser flow.
 

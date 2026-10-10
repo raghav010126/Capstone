@@ -16,10 +16,10 @@ This revision closes unsafe approval paths and corrects the presentation of the 
 
 | Check | Result |
 |---|---|
-| SQLite deterministic suite | 303 passed, 2 integration tests deselected (also with an invalid API key) |
-| DynamoDB/moto suite | 302 passed, 1 backend-specific skip, 2 integration tests deselected |
+| SQLite deterministic suite | 312 passed, 2 integration tests deselected (also with an invalid API key) |
+| DynamoDB/moto suite | 311 passed, 1 backend-specific skip, 2 integration tests deselected |
 | Real pipeline offline replay | 2 passed: upload, OCR/RAG/graph, review/resume, duplicate detection, audit and PDF |
-| Saved evaluation artifact gates | 21/21 passed; these do not run fresh LLM evaluations |
+| Saved evaluation artifact gates | 28/28 passed (21 + 7 for the LLM judge and RAGAS, added 10 October); these do not run fresh LLM evaluations |
 | Python lint | Passed |
 | Frontend ESLint, TypeScript, production build and static export | Passed |
 | Isolated browser workflow | Approve/reject/escalate visible; high-value override pending until a different senior reviewer approved; audit chain verified; auditor has no override/reclassification controls |
