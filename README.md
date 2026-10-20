@@ -173,7 +173,13 @@ pattern as my earlier RBAC chatbot assignment: access is enforced **where the da
 | Tamper detection (ELA) | `forensics/ela.py` (heatmap toggle in the viewer) + typography check; measured in `docs/eval_results/forensics.json` |
 | Multi-language | Spanish and Hindi documents (Devanagari OCR second pass, language-aware extraction); dedicated dataset and results |
 | Audit export | "Download case report": a PDF with every agent output and the audit trail |
-| LangSmith tracing | Every agent call with tokens, cost and latency per case; inputs scrubbed of PHI |
+| LangSmith tracing | Every agent call with tokens, cost and latency per case; inputs scrubbed of PHI. Example below |
+
+**LangSmith trace of the live demo case** (CASE-A266C211, run on AWS): 8 model calls, 31,675 tokens, $0.086, approved in
+81 s. No classifier call was needed on any document (OCR-first); the decision came from the rule file. Exported through
+the LangSmith API from the trace the pipeline runtime sent:
+
+![LangSmith trace of the live demo case: spans per agent with timeline, tokens, cost and model](docs/screenshots/langsmith-trace.png)
 
 ## Run it locally
 

@@ -42,3 +42,8 @@ build/
 
 # Office lock files (a deck open in PowerPoint)
 ~$*
+
+# demo recordings: hosted on YouTube/Drive, linked from the README (GitHub rejects files over 100 MB)
+*.mov
+*.mp4
+:memory:.ses
