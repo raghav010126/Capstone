@@ -1,7 +1,7 @@
-"""Build the stakeholder deck (docs/MediShield_capstone.pptx): a seven-slide story, then a short appendix.
+"""Build the stakeholder deck (docs/MediShield_capstone.pptx): a keynote-style story, then a short appendix.
 
-Problem -> idea -> how it works (diagram) -> does it work -> is it safe -> what's next. Plain language for a non-technical
-audience. Every measured number is read from docs/eval_results/, and the read-aloud script sits in each slide's speaker notes.
+One idea per slide, few words, big type. The story follows a real claim (CASE-FBDDBB1D): five documents, three hidden
+problems, caught in 82 seconds. Then how, proof, safety, and the ask. Plain language for a non-technical audience. Every measured number is read from docs/eval_results/, and the read-aloud script sits in each slide's speaker notes.
 
 Usage: uv run --with python-pptx python scripts/make_deck.py
 """
@@ -165,121 +165,160 @@ def table(slide, rows, x, y, widths, h, size=14):
     return tbl
 
 
+
+def big(slide, s, y, size=54, color=TEXT, h=1.4, bold=True):
+    """One large centred statement."""
+    text(slide, Inches(0.9), y, Inches(11.5), Inches(h), s, size, color, bold, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+
+
+def sub(slide, s, y, size=20, color=SOFT, h=0.9):
+    text(slide, Inches(1.4), y, Inches(10.5), Inches(h), s, size, color, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.TOP)
+
+
+def plain(kicker=None):
+    """A dark slide with no title block: the content is the statement."""
+    global n
+    n += 1
+    s = prs.slides.add_slide(BLANK)
+    s.background.fill.solid()
+    s.background.fill.fore_color.rgb = BG
+    if kicker:
+        text(s, Inches(0.9), Inches(0.55), Inches(11.5), Inches(0.35), kicker.upper(), 13, TEAL, True, align=PP_ALIGN.CENTER)
+    text(s, Inches(11.9), Inches(7.05), Inches(0.8), Inches(0.3), str(n + 1), 10, MUTED, align=PP_ALIGN.RIGHT)
+    return s
+
+
+def numbers(slide, items, y, h=1.9, size=60):
+    """A row of big numbers with a short label under each (``h`` in inches)."""
+    w = Inches(11.5) / len(items)
+    vh = Inches(size / 72 * 1.35)                       # room for one line at this size
+    for i, (v, l) in enumerate(items):
+        x = Inches(0.9) + w * i
+        text(slide, x, y, w, vh, v, size, TEAL, True, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.BOTTOM)
+        text(slide, x + Inches(0.2), y + vh + Inches(0.08), w - Inches(0.4), Inches(h) - vh - Inches(0.1), l, 16, SOFT, align=PP_ALIGN.CENTER)
+
+
 # ── 1. title ────────────────────────────────────────────────────────────────────────────────────────
-s = prs.slides.add_slide(BLANK)
-s.background.fill.solid()
-s.background.fill.fore_color.rgb = BG
-mark(s, Inches(0.8), Inches(0.7), Inches(0.75))
-text(s, Inches(1.75), Inches(0.78), Inches(6), Inches(0.6), "MediShield Health", 22, TEXT, True)
-text(s, Inches(0.8), Inches(2.3), Inches(11.8), Inches(1.2), "Claims decisions in a minute, not days", 50, TEXT, True)
-text(s, Inches(0.8), Inches(3.5), Inches(11.5), Inches(1.0),
-     "How we automated claims intake, what it costs, how well it works, and what I'm asking for", 24, SOFT)
-text(s, Inches(0.8), Inches(6.2), Inches(11.5), Inches(0.8), "Raghav Bansal · Solution Owner · October 2026", 14, MUTED)
-notes(s, "Hi, I'm Raghav Bansal, the Solution Owner for MediShield's claims-intake automation. In the next ten minutes I'll "
-         "show you the problem we have today, the idea behind the fix, proof that it works, and the one decision I need "
-         "from you. Then you'll see it running live.")
+s = plain()
+mark(s, Inches(6.26), Inches(1.6), Inches(0.8))
+big(s, "A minute, not a week.", Inches(2.7), 66)
+sub(s, "Claims intake at MediShield Health", Inches(4.2), 24)
+text(s, Inches(0.9), Inches(6.3), Inches(11.5), Inches(0.5), "Raghav Bansal · Solution Owner · October 2026", 14, MUTED, align=PP_ALIGN.CENTER)
+notes(s, "Hi, I'm Raghav, the Solution Owner for claims intake at MediShield. I want to tell you about one claim. Then I'll "
+         "show you what it taught us, and what I'd like to do about it.")
 
-# ── 2. the problem ──────────────────────────────────────────────────────────────────────────────────
-s = new("Every claim waits for a person to read five documents", "The problem today")
-for i, (v, l, sub) in enumerate([("85,000", "documents a month", "claim forms, ID cards, discharge summaries, prescriptions, amendments"),
-                                  ("120", "people reading them", "sorting, checking and routing by hand"),
-                                  ("4.2 days", "per claim", "a member waits almost a week for an answer"),
-                                  ("$18.4M", "a year", f"about ${manual_doc:.0f} of handling for every document")]):
-    stat(s, Inches(0.7 + i * 3.05), Inches(1.95), Inches(2.8), Inches(2.3), v, l, RED if i == 3 else TEAL, sub)
-box(s, Inches(0.7), Inches(4.7), Inches(11.9), Inches(1.55), CARD2, None)
-text(s, Inches(1.0), Inches(4.9), Inches(11.4), Inches(0.4), "WHAT GOES WRONG", 12, TEAL, True)
-text(s, Inches(1.0), Inches(5.3), Inches(11.4), Inches(0.9),
-     "Slow answers for members. 12% of documents handled twice. Three open regulatory audits on identity checks. "
-     "And when a decision is questioned, nobody can show exactly why it was made.", 17, TEXT)
-notes(s, "Here's the problem. Every month 85,000 documents arrive, and 120 people read every one by hand. A claim waits 4.2 days, and the handling costs 18.4 million dollars a year, about 18 dollars a document. It's not just slow. One in eight documents is handled twice, we have three open audits on identity checks, and when someone asks why a claim was rejected, nobody can show exactly how the decision was made.")
+# ── 2. meet the claim ───────────────────────────────────────────────────────────────────────────────
+s = plain("A real claim from our test set")
+big(s, "Meet claim FBDDBB1D.", Inches(1.1), 54)
+numbers(s, [("5", "documents: a claim form, an ID card,\na discharge summary, a prescription,\na policy amendment"),
+            ("$16,825", "claimed, mostly for\na knee replacement"),
+            ("by email", "the way most claims\nactually arrive")], Inches(2.6), 2.6)
+sub(s, "Today, a claim like this waits 4.2 days while one of 120 people reads every page by hand.", Inches(5.6), 20, MUTED)
+notes(s, "Meet claim FBDDBB1D. Five documents: a claim form, an ID card, a discharge summary, a prescription and a policy "
+         "amendment. Sixteen thousand eight hundred dollars, mostly for a knee replacement. It arrived by email, like most of "
+         "them do. Today, a claim like this waits four days while one of our 120 reviewers reads every page by hand. "
+         "85,000 documents a month. 18 million dollars a year.")
 
-# ── 3. the idea ─────────────────────────────────────────────────────────────────────────────────────
-s = new("Software reads. A rulebook decides. People judge.", "The idea")
-cols = [("1 · Software reads", ("Seven specialist 'clerks', each an AI agent: one identifies the document, one checks identity, "
-                               "one checks medical codes and amounts, one checks the policy, one looks for fraud."), TEAL),
-        ("2 · A rulebook decides", ("The AI never decides. It reports facts. A written rulebook turns those facts into Approve, "
-                                    "Reject or Escalate, so the same facts always give the same answer."), AMBER),
-        ("3 · People handle doubt", ("Anything uncertain goes to a reviewer. A big override needs a second signature from a "
-                                     "senior reviewer. Every click is written to a tamper-proof logbook."), GREEN)]
-for i, (t, body, col) in enumerate(cols):
-    x = Inches(0.7 + i * 4.05)
-    box(s, x, Inches(1.95), Inches(3.8), Inches(3.4))
-    bar = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, x, Inches(2.25), Inches(0.06), Inches(2.8))
-    bar.fill.solid()
-    bar.fill.fore_color.rgb = col
-    bar.line.fill.background()
-    text(s, x + Inches(0.35), Inches(2.2), Inches(3.2), Inches(0.5), t, 20, col, True)
-    text(s, x + Inches(0.35), Inches(2.85), Inches(3.2), Inches(2.4), body, 15, SOFT)
-box(s, Inches(0.7), Inches(5.65), Inches(11.9), Inches(1.0), CARD2, None)
-text(s, Inches(1.0), Inches(5.78), Inches(11.4), Inches(0.8),
-     "Works on documents in English, Spanish and Hindi.  ·  Accepts claims by web upload or by email.  ·  "
-     "Answers staff questions in plain English, with the policy page cited.", 15, TEXT)
-notes(s, 'The idea, in one sentence: software does the reading, people keep the judgement. Picture a mailroom with seven specialist clerks, each one an AI agent. One identifies the document, one checks identity and tampering, one checks medical codes and amounts, one checks the policy, one looks for fraud. The important part: the AI never decides. It reports facts, and a written rulebook turns them into Approve, Reject or Escalate. Same facts, same answer, every time. Anything uncertain goes to a person, and a big override needs a second signature. It reads Spanish and Hindi as well as English, takes claims by email, and staff can ask it questions and get the policy page cited back.')
+# ── 3. three things were wrong ──────────────────────────────────────────────────────────────────────
+s = plain("What a careful reader would have found")
+big(s, "Three things were wrong with it.", Inches(0.95), 50)
+for i, (t, line) in enumerate([("55 days", "The prescription was written 55 days after the treatment."),
+                               ("Day 0", "The policy was cancelled on the very day the patient was admitted."),
+                               ("Schedule II", "And the drug was hydrocodone, a controlled substance.")]):
+    y = Inches(2.45 + i * 1.15)
+    text(s, Inches(1.4), y, Inches(2.6), Inches(0.9), t, 34, AMBER, True, align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
+    text(s, Inches(4.3), y, Inches(8), Inches(0.9), line, 22, TEXT, anchor=MSO_ANCHOR.MIDDLE)
+sub(s, "None of this is visible on any single page. You only see it when you cross-check all five.", Inches(6.1), 18, MUTED)
+notes(s, "Three things were wrong with it. The prescription was written 55 days after the treatment. The policy had been "
+         "cancelled on the very day the patient was admitted. And the drug was hydrocodone, a controlled substance. Here's "
+         "the thing: none of that is visible on any single page. You only see it when you lay all five documents side by "
+         "side and cross-check the dates. That's exactly the work that takes a person four days.")
 
-# ── 4. how it works (diagram) ───────────────────────────────────────────────────────────────────────
+# ── 4. caught in 82 seconds ─────────────────────────────────────────────────────────────────────────
+s = plain()
+big(s, "We found all three in 82 seconds.", Inches(1.5), 56)
+sub(s, "Escalated to a reviewer, with every reason written down and the policy page cited.", Inches(3.3), 22)
+sub(s, "Nobody had to read five documents to get there.", Inches(4.1), 22, TEAL)
+text(s, Inches(0.9), Inches(5.6), Inches(11.5), Inches(0.5), "Case created 18:29:59 · decided 18:31:21 · from the case's own audit trail", 13, MUTED, align=PP_ALIGN.CENTER)
+notes(s, "The system found all three in 82 seconds. It didn't approve the claim and it didn't reject it. It escalated it to a "
+         "reviewer, with every reason written down and the policy page cited. The reviewer opens the case and the work is "
+         "already done. Nobody had to read five documents to get there. That's the whole idea.")
+
+# ── 5. how: seven specialists, one rulebook ─────────────────────────────────────────────────────────
+s = plain("How")
+big(s, "Seven specialists. One rulebook.", Inches(0.95), 54)
+for i, (t, line, col) in enumerate([("Software reads.", "Seven AI agents, each with one job: identify, verify identity, check codes and amounts, check the policy, look for fraud.", TEAL),
+                                    ("A rulebook decides.", "The AI reports facts. A written rulebook turns them into Approve, Reject or Escalate. Same facts, same answer.", AMBER),
+                                    ("People judge the rest.", "Anything uncertain goes to a reviewer. Over $10,000, a second senior signature. Every click in a tamper-proof log.", GREEN)]):
+    y = Inches(2.55 + i * 1.3)
+    text(s, Inches(1.4), y, Inches(4.2), Inches(1.0), t, 28, col, True, anchor=MSO_ANCHOR.MIDDLE)
+    text(s, Inches(5.8), y, Inches(6.6), Inches(1.0), line, 16, SOFT, anchor=MSO_ANCHOR.MIDDLE)
+sub(s, "English, Spanish and Hindi.  ·  By web upload or email.  ·  Ask it a question, get the policy page back.", Inches(6.4), 15, MUTED)
+notes(s, 'How? Seven specialists and one rulebook. Picture a mailroom with seven clerks, each an AI agent with one job: identify the document, check identity and tampering, check the codes and amounts, check the policy, look for fraud. Then the part that matters: the AI never decides. It reports facts, and a written rulebook turns them into Approve, Reject or Escalate. Same facts, same answer, every time. People judge the rest: anything uncertain goes to a reviewer, and anything over ten thousand dollars needs a second signature. It reads Spanish and Hindi too, and staff can simply ask it a question.')
+
+# ── 6. the diagram ──────────────────────────────────────────────────────────────────────────────────
 n += 1
 s = prs.slides.add_slide(BLANK)
 s.background.fill.solid()
 s.background.fill.fore_color.rgb = BG
 s.shapes.add_picture(str(DIAGRAM), 0, 0, width=W, height=H)
-notes(s, "This is how a claim flows. Documents come in at the top and are read by an OCR engine inside our own environment, at no cost. The classifier identifies each document from its printed title, and only asks the AI vision model when that isn't clear. Then the four specialists run at the same time: identity, claims, policy and fraud. Everything lands in the decision engine, where the rulebook decides. Escalations go to a reviewer; large overrides need a second signature. On the right is what wraps every case: the web app, the assistant, the tamper-proof audit trail, tracing of every AI call with its cost, and the platform: serverless on AWS, one stack, about a dollar a month idle.")
+notes(s, "Here it is end to end. Documents in at the top, read by an OCR engine inside our own environment at no cost. The classifier identifies each one from its printed title and only asks the AI vision model when that isn't clear. The four specialists run at the same time, the rulebook decides, escalations go to a person. And around every case: the web app, the assistant, the tamper-proof audit trail, a trace of every AI call, all serverless on AWS for about a dollar a month idle.")
 
-# ── 5. does it work ─────────────────────────────────────────────────────────────────────────────────
-s = new("Tested on documents it had never seen", "Does it work?")
-tiles = [(pct(held["classification"]["accuracy"]), "documents identified correctly", "78 documents, 6 types"),
-         (pct(held["extraction"]["rubric_claim_completeness"]), "claim fields read correctly", "codes, amounts, provider"),
-         (pct(held["retrieval"]["recall@3"]), "right policy clause found", "with the page number"),
-         (pct(d["accuracy_visible"]), "decisions correct", f"{pct(d['accuracy_all'])} counting labels not drawn on the page*"),
-         (f"${cost_case:.2f}", "per claim in AI cost", f"vs ≈ ${manual_doc:.0f} per document by hand"),
-         ("≈ 1 min", "per claim, live on AWS", "today: 4.2 days")]
-for i, (v, l, sub) in enumerate(tiles):
-    col, row = i % 3, i // 3
-    stat(s, Inches(0.7 + col * 4.05), Inches(1.9 + row * 2.0), Inches(3.8), Inches(1.8), v, l, TEAL, sub)
-box(s, Inches(0.7), Inches(5.95), Inches(11.9), Inches(0.72), CARD2, None)
-text(s, Inches(1.0), Inches(6.08), Inches(11.4), Inches(0.5),
-     f"Spanish and Hindi: {ml_docs} documents, {pct(ml_dev['classification']['accuracy'])} identified correctly, "
-     f"{pct(ml_lo)}–{pct(ml_hi)} decided correctly.   Whole claims (all five documents): {pct(held['cases']['accuracy'])} correct.", 15, TEXT)
-text(s, Inches(0.7), Inches(6.72), Inches(11.9), Inches(0.3),
-     "* Measured on a labelled test set the system never saw during development. The pilot confirms this on real scans.", 11, MUTED)
-notes(s, 'Does it work? I tested it on 78 documents it had never seen. It identified every document correctly, read every required claim field correctly, and found the right policy clause with the page number every time. Decisions were 100 percent correct where the evidence is on the page, 96 percent counting a few test labels that were never drawn on the documents. Each claim costs about 8 cents in AI, against 18 dollars by hand, and takes about a minute. Spanish and Hindi: 80 documents, all identified correctly, 95 to 100 percent decided correctly. Whole claims, all five documents together: 88 percent. One honest note: this is a labelled test set. Real scans come in the pilot.')
+# ── 7. does it work ─────────────────────────────────────────────────────────────────────────────────
+s = plain("Tested on 78 documents it had never seen")
+numbers(s, [(pct(held["classification"]["accuracy"]), "documents\nidentified correctly"),
+            (pct(held["extraction"]["rubric_claim_completeness"]), "claim fields\nread correctly"),
+            (pct(held["retrieval"]["recall@3"]), "right policy clause,\nwith the page")], Inches(1.3), 2.4, 72)
+numbers(s, [(pct(d["accuracy_visible"]), "decisions correct where the\nevidence is on the page"),
+            (pct(d["accuracy_all"]), "counting labels the test set\nnever drew on the page"),
+            (pct(ml_dev["classification"]["accuracy"]), f"of {ml_docs} Spanish and Hindi\ndocuments identified correctly")], Inches(3.95), 2.1, 48)
+sub(s, "Labelled test data, not real scans yet. That is what the pilot is for.", Inches(6.3), 15, MUTED)
+notes(s, "Does it work? I tested it on 78 documents it had never seen. Every document identified correctly. Every claim field read correctly. The right policy clause found, with the page, every time. Decisions: 100 percent correct where the evidence is on the page, 96 percent counting a few test labels never drawn on the documents. And across 80 Spanish and Hindi documents, every one identified correctly, 95 to 100 percent decided correctly. One honest note: labelled test data, not real scans yet. That's what the pilot is for.")
 
-# ── 6. is it safe ───────────────────────────────────────────────────────────────────────────────────
-s = new("Safety was built in, not bolted on", "Is it safe?")
-items = [("Each role sees only its data", "Enforced where data is read, not just hidden on screen. The assistant too."),
-         ("Two signatures over $10,000", "Over $10,000 a senior reviewer must approve. Nobody approves their own request."),
-         ("A tamper-proof logbook", "Every login, view, decision and override is chained; an edit or deletion shows."),
-         ("Hidden instructions fail", f"{rt['attacks']} attack documents hid 'approve this' instructions. Decisions changed: {rt['flips']}."),
-         ("A second AI checks the first", (f"A second model grades every assistant answer; it caught {judge.get('controls_caught', 3)} of "
-                                            f"{judge.get('controls', 3)} planted wrong answers.")),
-         ("Capped spend, private data", "AI spending is capped in code. Patient details are removed from logs and traces.")]
-for i, (t, line) in enumerate(items):
-    col, row = i % 3, i // 3
-    tile(s, Inches(0.7 + col * 4.05), Inches(1.95 + row * 2.3), Inches(3.8), Inches(2.05), t, line)
-notes(s, "Is it safe? Each role sees only its own data, enforced where the data is read, so a submitter can't talk the assistant into showing the audit trail. Overrides over ten thousand dollars need a senior's second signature, and nobody approves their own request. Every action goes into a tamper-proof logbook: each entry is chained to the one before, so edits show. Documents with hidden 'approve this' instructions: seven attacks, zero decisions changed. A second, independent AI grades every assistant answer, and it caught all three wrong answers I planted. Spending is capped in code, and patient details are stripped from logs.")
+# ── 8. cost and speed ───────────────────────────────────────────────────────────────────────────────
+s = plain()
+for i, (a, b, col, label) in enumerate([("$18", f"${cost_case:.2f}", RED, "per document by hand   →   per whole claim in AI"),
+                                        ("4.2 days", "1 minute", RED, "waiting today   →   live, on AWS")]):
+    y = Inches(1.3 + i * 2.6)
+    text(s, Inches(0.9), y, Inches(5.2), Inches(1.3), a, 64, MUTED, True, align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
+    text(s, Inches(6.1), y, Inches(1.1), Inches(1.3), "→", 48, MUTED, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+    text(s, Inches(7.2), y, Inches(5.2), Inches(1.3), b, 64, TEAL, True, anchor=MSO_ANCHOR.MIDDLE)
+    text(s, Inches(0.9), y + Inches(1.35), Inches(11.5), Inches(0.4), label, 15, MUTED, align=PP_ALIGN.CENTER)
+sub(s, "Savings depend on how many claims go straight through. The pilot measures that; I'm not guessing it.", Inches(6.4), 15, MUTED)
+notes(s, "Cost and speed. Eighteen dollars of handling per document today, against about eight cents of AI per whole claim. "
+         "Four point two days of waiting, against about a minute, live on AWS. I'm deliberately not giving you a savings "
+         "figure. It depends on how many claims go straight through, and the pilot measures that rather than guessing it.")
 
-# ── 7. what's next ──────────────────────────────────────────────────────────────────────────────────
-s = new("Earn trust in three stages", "What's next")
-for i, (t, line, exit_) in enumerate([("1 · Shadow pilot", "Runs beside one team on real scans. Its decisions are compared, never used.",
-                                        "Move on at ≥ 95% agreement with reviewers"),
-                                       ("2 · Assisted", "The system recommends; a person confirms every decision.",
-                                        "Move on when overrides fall below 5%"),
-                                       ("3 · Straight-through", "Clean claims are approved automatically. Escalations always stay human.",
-                                        "Reviewed monthly against the quality monitor")]):
-    x = Inches(0.7 + i * 4.05)
-    box(s, x, Inches(1.95), Inches(3.8), Inches(2.5))
-    text(s, x + Inches(0.3), Inches(2.15), Inches(3.2), Inches(0.45), t, 20, TEAL, True)
-    text(s, x + Inches(0.3), Inches(2.7), Inches(3.2), Inches(1.0), line, 15, SOFT)
-    text(s, x + Inches(0.3), Inches(3.75), Inches(3.2), Inches(0.6), exit_, 13, GREEN, True)
-box(s, Inches(0.7), Inches(4.7), Inches(5.85), Inches(1.95), CARD2, None)
-text(s, Inches(1.0), Inches(4.88), Inches(5.3), Inches(0.35), "STILL TO PROVE, IN THE PILOT", 12, AMBER, True)
-text(s, Inches(1.0), Inches(5.25), Inches(5.3), Inches(1.3),
-     "Real scans (fax noise, skew, new policies)\nVery subtle forged ID cards\nPrivacy review of the AI provider before real patient data", 14, SOFT)
-box(s, Inches(6.75), Inches(4.7), Inches(5.85), Inches(1.95), TEAL_DARK, None)
-text(s, Inches(7.05), Inches(4.88), Inches(5.3), Inches(0.35), "WHAT I NEED TODAY", 12, TEXT, True)
-text(s, Inches(7.05), Inches(5.25), Inches(5.3), Inches(1.3),
-     "1.  Name a pilot team and an owner for disagreements\n2.  Approve the AI-provider and data-privacy review\n3.  Scope staff single sign-on",
-     14, TEXT)
-notes(s, "What's next? I'm not asking to switch this on for everyone. Stage one is a shadow pilot: it runs beside one reviewer team on real scans, and its decisions are compared, never used. We move on at 95 percent agreement. Stage two is assisted: the system recommends, a person confirms. We move on when overrides drop below 5 percent. Stage three, clean claims go straight through; escalations always stay human. Three things are still to prove, and the pilot proves them: real scans, subtle forged IDs, and a privacy review of the AI provider. What I need today: a pilot team and an owner, approval for the privacy review, and scoping of single sign-on. Now let me show you it working.")
+# ── 9. safe by design ───────────────────────────────────────────────────────────────────────────────
+s = plain("Is it safe?")
+big(s, "Safe by design.", Inches(0.95), 54)
+for i, line in enumerate(["Each role sees only its own data, enforced where the data is read.",
+                          "Over $10,000, a second signature from a senior reviewer.",
+                          "A logbook nobody can edit: every action chained to the one before.",
+                          f"{rt['attacks']} documents with hidden 'approve this' instructions. Decisions changed: {rt['flips']}.",
+                          f"A second AI grades the first. Planted wrong answers caught: {judge.get('controls_caught', 3)} of {judge.get('controls', 3)}."]):
+    text(s, Inches(1.6), Inches(2.5 + i * 0.75), Inches(10.4), Inches(0.65), line, 20, TEXT, anchor=MSO_ANCHOR.MIDDLE)
+sub(s, "AI spend capped in code. Patient details stripped from logs and traces.", Inches(6.35), 15, MUTED)
+notes(s, "Is it safe? Each role sees only its own data, enforced where the data is read, so a submitter can't talk the assistant into showing the audit trail. Over ten thousand dollars, a senior reviewer adds a second signature; nobody approves their own request. Every action goes into a logbook nobody can edit. We planted hidden 'approve this' instructions in seven documents: zero decisions changed. And a second, independent AI grades every assistant answer; it caught all three wrong answers I planted. Spend is capped in code, and patient details never reach the logs.")
+
+# ── 10. what's next ─────────────────────────────────────────────────────────────────────────────────
+s = plain("What's next")
+big(s, "Shadow. Assist. Automate.", Inches(0.95), 54)
+for i, (t, line, gate) in enumerate([("Shadow", "Runs beside one team on real scans.\nIts decisions are compared, never used.", "≥ 95% agreement"),
+                                      ("Assist", "The system recommends.\nA person confirms every decision.", "< 5% overrides"),
+                                      ("Automate", "Clean claims go straight through.\nEscalations always stay human.", "reviewed monthly")]):
+    x = Inches(0.9) + Inches(11.5) / 3 * i
+    text(s, x, Inches(2.5), Inches(11.5) / 3, Inches(0.6), t, 28, TEAL, True, align=PP_ALIGN.CENTER)
+    text(s, x + Inches(0.3), Inches(3.15), Inches(11.5) / 3 - Inches(0.6), Inches(1.2), line, 16, SOFT, align=PP_ALIGN.CENTER)
+    text(s, x, Inches(4.35), Inches(11.5) / 3, Inches(0.4), gate, 15, GREEN, True, align=PP_ALIGN.CENTER)
+text(s, Inches(0.9), Inches(5.3), Inches(11.5), Inches(0.35), "WHAT I NEED TODAY", 13, AMBER, True, align=PP_ALIGN.CENTER)
+sub(s, "A pilot team and an owner.   ·   Approval for the AI-provider privacy review.   ·   Scope for staff single sign-on.", Inches(5.7), 18, TEXT)
+notes(s, "What's next? Not a switch-on for everyone. Three stages, each with a gate. Shadow: it runs beside one team on real scans, decisions compared, never used; we move on at 95 percent agreement. Assist: it recommends, a person confirms; we move on under 5 percent overrides. Automate: clean claims go straight through, escalations stay human. The pilot also closes the three open questions: real scans, subtle forged IDs, and the AI-provider privacy review. What I need today: a pilot team and an owner, approval for that review, and scope for single sign-on. Now let me show you it live.")
+
+# ── 11. transition ──────────────────────────────────────────────────────────────────────────────────
+s = plain()
+big(s, "Let's see it live.", Inches(2.8), 60)
+notes(s, "Switch to the browser.")
 
 # ── appendix ────────────────────────────────────────────────────────────────────────────────────────
 s = new("Everything in the brief, plus what operations will want", "Appendix A · Scope delivered")
