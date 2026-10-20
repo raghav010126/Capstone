@@ -8,12 +8,11 @@ team and a **role-aware assistant** that answers questions with citations.
 | | |
 |---|---|
 | **Live demo** | https://d3064azeabhrfe.cloudfront.net (AWS: Bedrock AgentCore + Lambda + DynamoDB). Logins on request; there are no public demo passwords. |
-| **Demo video** | _link added after recording_ |
+| **Demo video** | [Live demo, 10 min](https://drive.google.com/file/d/1eKqM5hIofoF1g52NJ1MX39QSQv5An7ui/view): a claim from upload to decision, the role-aware assistant, human review with four-eyes approval, insights and the audit chain. Optional: [presentation, 10 min](https://drive.google.com/file/d/1pFXFpCrCyWHN3gUxyr5m-tlZSWawuV_t/view) (business case, architecture, results, recommendation). [Both in one folder](https://drive.google.com/drive/folders/1Q1m6mSJF3qDzUp0wZYL4cWuSI-q18Esp). |
 | **Evaluation report** | [docs/EVAL_REPORT.md](docs/EVAL_REPORT.md): every number below is reproducible with `make eval` / `make report` |
 | **Sample documents** | [22 labelled synthetic documents, 6 complete cases and both policies](docs/samples/medishield-samples.zip), reproducible with `make samples`. |
-| **Repository** | Private for now. Demo video and final submission visibility remain pending. |
-| **Slides** | [Dark presentation](docs/MediShield_capstone.pptx): eight main slides plus four appendix slides, with an 8-minute demo script in speaker notes. |
-| **Try it** | [docs/manual_testing.md](docs/manual_testing.md): a 15-minute manual test script |
+| **Slides** | [Presentation](docs/MediShield_capstone.pptx): nine main slides plus four appendix slides, with speaker notes. Claim-flow diagram: [docs/diagrams/claim_flow.png](docs/diagrams/claim_flow.png). |
+| **Try it** | [docs/manual_testing.md](docs/manual_testing.md): a 20-minute manual test script |
 
 ![Case detail: document viewer with evidence boxes, per-agent panels and the decision](docs/screenshots/case-detail.png)
 
