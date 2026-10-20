@@ -249,8 +249,8 @@ items = [("Each role sees only its data", "Enforced where data is read, not just
          ("Two signatures over $10,000", "Over $10,000 a senior reviewer must approve. Nobody approves their own request."),
          ("A tamper-proof logbook", "Every login, view, decision and override is chained; an edit or deletion shows."),
          ("Hidden instructions fail", f"{rt['attacks']} attack documents hid 'approve this' instructions. Decisions changed: {rt['flips']}."),
-         ("A second AI checks the first", f"A second model grades every assistant answer; it caught {judge.get('controls_caught', 3)} of "
-                                            f"{judge.get('controls', 3)} planted wrong answers."),
+         ("A second AI checks the first", (f"A second model grades every assistant answer; it caught {judge.get('controls_caught', 3)} of "
+                                            f"{judge.get('controls', 3)} planted wrong answers.")),
          ("Capped spend, private data", "AI spending is capped in code. Patient details are removed from logs and traces.")]
 for i, (t, line) in enumerate(items):
     col, row = i % 3, i // 3
